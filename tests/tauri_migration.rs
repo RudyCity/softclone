@@ -42,3 +42,23 @@ fn windows_discovery_does_not_spawn_visible_terminal() {
     assert!(store.contains("\"-WindowStyle\""));
     assert!(host.contains("cfg_attr(target_os = \"windows\", windows_subsystem = \"windows\")"));
 }
+
+#[test]
+fn updater_commands_and_release_validation_are_present() {
+    let backend = include_str!("../src-tauri/src/update_system.rs");
+    let host = include_str!("../src-tauri/src/main.rs");
+    let frontend = include_str!("../frontend/app.js");
+    for command in [
+        "check_updates",
+        "download_update",
+        "update_download_progress",
+        "cancel_update_download",
+        "open_downloaded_update",
+    ] {
+        assert!(host.contains(command), "Missing updater command: {command}");
+        assert!(frontend.contains(command), "Missing UI handler: {command}");
+    }
+    assert!(backend.contains("checksum_from_manifest"));
+    assert!(backend.contains("digest_file(&path)? != verified.sha256"));
+    assert!(backend.contains("asset.browser_download_url == github_url"));
+}

@@ -1,7 +1,7 @@
 {
   "name": "softclone-desktop",
   "private": true,
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Local Tauri 2 frontend with zero runtime JavaScript dependencies",
   "scripts": {
     "dev": "tauri dev",

@@ -21,6 +21,8 @@ use std::{
 use tauri::State;
 use uuid::Uuid;
 
+mod update_system;
+
 type DesktopResult<T> = Result<T, String>;
 
 struct Inner {
@@ -623,6 +625,7 @@ async fn open_external(target: String) -> DesktopResult<()> {
     blocking(move || {
         let url = match target.as_str() {
             "source" => "https://github.com/RudyCity/softclone",
+            "releases" => "https://github.com/RudyCity/softclone/releases",
             "support" => "https://ko-fi.com/rudycity",
             _ => return Err("External URL is not in SoftClone's allowlist.".into()),
         };
@@ -653,8 +656,14 @@ fn app_info() -> serde_json::Value {
 fn main() {
     tauri::Builder::default()
         .manage(Desktop::new())
+        .manage(update_system::UpdateManager::default())
         .invoke_handler(tauri::generate_handler![
             app_info,
+            update_system::check_updates,
+            update_system::update_download_progress,
+            update_system::cancel_update_download,
+            update_system::download_update,
+            update_system::open_downloaded_update,
             list_instances,
             discover_apps,
             preflight,

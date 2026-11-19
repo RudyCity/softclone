@@ -34,6 +34,14 @@ npm run build
 
 `npm run build` produces **native Tauri installers and packages**, not the earlier unbundled egui executables. The CI workflow tests the core and builds native desktop bundles on Windows, macOS and Linux. Uploads are GitHub Actions artifacts; a release is only published after the platform build matrix passes.
 
+## Updates
+
+SoftClone checks the latest **stable** GitHub release when you open the app (optional in the Updates page). Use **Updates → Check for updates** to refresh the latest version, changelog and compatible installer for your operating system. When a newer version is available, you can download the platform-specific installer with progress/cancellation.
+
+Every download must match the official release's **SHA256SUMS.txt**, exact asset name, declared byte size and allowed GitHub release URL. The file is re-verified before opening the installer. Installation happens **only after you explicitly approve it**; Windows opens the native .exe installer, macOS opens the .dmg, and Linux opens the .AppImage using the system's file handler. Version downgrades, prereleases and arbitrary download URLs are rejected. Existing clone data remains unchanged.
+
+**Security limitation:** Tauri's fully automatic in-place updater requires signed releases and a private signing key held outside the public repository. This project does not distribute such a key; automatic silent installation is intentionally disabled. The update center implements a verified, user-approved installer workflow, not an unsigned background code updater.
+
 ## Features
 
 - **My clones:** list, search, launch, stop and restart managed child processes; rename, duplicate, back up, restore, delete, and open managed folders.
@@ -54,4 +62,4 @@ SoftClone **does not** bypass activation, software licenses, DRM, signatures, pl
 
 All clone files and diagnostic logs stay on the local device. Backups may contain private application data and are not encrypted. There is no background telemetry. Third-party software retains its own license.
 
-See [architecture](docs/architecture.md), [design system](docs/design-system.md) and [Tauri migration notes](docs/releases/v0.6.2.md).
+See [architecture](docs/architecture.md), [design system](docs/design-system.md) and [Tauri migration notes](docs/releases/v0.7.0.md).

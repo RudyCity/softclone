@@ -5,7 +5,9 @@ const $$=(q)=>[...document.querySelectorAll(q)];
 const e=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const bytes=(v)=>{let n=Number(v)||0,i=0;const u=["B","KB","MB","GB","TB"];while(n>=1024&&i<4){n/=1024;i++}return (i?n.toFixed(1):n.toFixed(0))+" "+u[i]};
 const date=(v)=>new Date(Number(v)*1000).toLocaleString();
-const S={page:"library",clones:[],apps:[],logs:[],logErr:null,query:"",filter:"all",busy:false,creating:false,progress:null,scan:false,scanned:false,modal:null,preflight:null,info:{version:"0.6.2",os:"desktop",license:"Apache-2.0",runtime:"Tauri 2"},form:{source:"",name:"",entrypoint:"",isolatedProfile:true,profileOnly:false}};
+let autoCheckUpdates=true;
+try{autoCheckUpdates=localStorage.getItem("softclone.autoCheckUpdates")!=="false"}catch{}
+const S={update:{checked:false,checking:false,info:null,error:"",downloading:false,downloaded:null,progress:null,autoCheck:autoCheckUpdates},page:"library",clones:[],apps:[],logs:[],logErr:null,query:"",filter:"all",busy:false,creating:false,progress:null,scan:false,scanned:false,modal:null,preflight:null,info:{version:"0.6.2",os:"desktop",license:"Apache-2.0",runtime:"Tauri 2"},form:{source:"",name:"",entrypoint:"",isolatedProfile:true,profileOnly:false}};
 const btn=(label,action,klass="secondary",attrs="")=>'<button class="btn btn-'+klass+'" type="button" data-action="'+action+'" '+attrs+' '+(S.busy?"disabled":"")+'>'+label+'</button>';
 const header=(tag,title,desc,actions="")=>'<div class="page-heading"><div><p class="eyebrow">'+e(tag)+'</p><h1>'+e(title)+'</h1><p class="page-lead">'+e(desc)+'</p></div>'+actions+'</div>';
 const empty=(name,desc,action="")=>'<div class="empty"><div class="empty-emblem">□</div><h3>'+e(name)+'</h3><p>'+e(desc)+'</p>'+action+'</div>';
@@ -67,12 +69,73 @@ function guide(){
 function about(){
  const line=(k,v)=>'<div>'+e(k)+'</div><div>'+e(v)+'</div>';
  return header("Application information","About SoftClone","An open-source local application cloning workspace.")+
- '<section class="panel"><div class="panel-body"><div class="fact-table">'+line("Application","SoftClone")+line("Version",S.info.version)+line("Desktop runtime",S.info.runtime)+line("Platform",S.info.os)+line("License",S.info.license)+line("Cloning engine","Rust + Rune")+line("Data","Local only")+'</div><div class="toolbar" style="margin-top:22px;margin-bottom:0">'+btn("GitHub source","source-link","primary")+btn("Support development","support-link")+btn("Open local data","data-folder","quiet")+'</div></div></section><div class="notice">SoftClone is licensed under Apache-2.0. Third-party software and dependencies keep their own license terms. Donations are optional.</div>';
+ '<section class="panel"><div class="panel-body"><div class="fact-table">'+line("Application","SoftClone")+line("Version",S.info.version)+line("Desktop runtime",S.info.runtime)+line("Platform",S.info.os)+line("License",S.info.license)+line("Cloning engine","Rust + Rune")+line("Data","Local only")+'</div><div class="toolbar" style="margin-top:22px;margin-bottom:0">'+btn("GitHub source","source-link","primary")+btn("Support development","support-link")+btn("Open local data","data-folder","quiet")+btn("Check for updates","go-updates","quiet")+'</div></div></section><div class="notice">SoftClone is licensed under Apache-2.0. Third-party software and dependencies keep their own license terms. Donations are optional.</div>';
 }
+
+async function checkUpdates(silent=false){
+ if(S.update.checking)return;
+ S.update.checking=true;S.update.error="";
+ if(S.page==="updates")render();
+ try{
+  S.update.info=await api("check_updates");
+  S.update.checked=true;
+  if(S.update.info.updateAvailable&&silent)alert("SoftClone "+S.update.info.latestVersion+" is available.");
+  if(!silent)alert(S.update.info.updateAvailable?"A newer SoftClone release is available.":"SoftClone is up to date.");
+ }catch(err){
+  S.update.checked=true;S.update.error=String(err);
+  if(!silent)alert(err,true);
+ }finally{S.update.checking=false;if(S.page==="updates")render();else{const indicator=$("#update-indicator");if(indicator)indicator.hidden=!S.update.info?.updateAvailable}}
+}
+function updatePage(){
+ const u=S.update,info=u.info;
+ const status=u.checking?"Checking for updates…":u.error?"Could not check for updates":!info?"Version status not checked":info.updateAvailable?"A newer release is available":"You're up to date";
+ const description=info?.updateAvailable?"Version "+e(info.latestVersion)+" is available from the official stable release channel.":!info?"Connect to the internet to check the latest stable release.":"You have the latest stable version of SoftClone.";
+ const canDownload=!!info?.updateAvailable&&info.platformSupported&&!u.downloading;
+ const downloaded=u.downloaded;
+ const progress=u.downloading?'<div class="progress-shell"><div class="progress-meta"><strong>Downloading verified installer…</strong><span id="update-progress-text">Preparing…</span></div><div class="progress-track"><div class="progress-fill" id="update-progress-fill"></div></div><div class="muted">The package will be checked against the official SHA-256 manifest before it can be opened.</div><div style="margin-top:13px"><button type="button" class="btn btn-danger btn-sm" data-action="cancel-update">Cancel download</button></div></div>':"";
+ const packageInfo=info?.assetName?'<div class="notice" style="margin:12px 0">Recommended installer: <strong>'+e(info.assetName)+'</strong> · '+bytes(info.assetSize)+'</div>':info?.updateAvailable?'<div class="notice warning" style="margin:12px 0">There is no compatible installer for this operating system and architecture. Open GitHub Releases to select a compatible package manually.</div>':"";
+ const latest=info?.latestVersion||"Not checked";
+ return header("App maintenance","Updates","Stay informed about official stable SoftClone releases and install verified updates on your device.")+
+ '<div class="metrics">'+metric("Installed version",S.info.version,"This application")+metric("Latest stable",latest,"Official GitHub release")+metric("Update channel","Stable","No pre-release packages")+'</div>'+
+ '<section class="panel"><div class="panel-header"><div><h2>'+e(status)+'</h2><div class="muted">'+description+'</div></div>'+pill(info?.updateAvailable?"Update available":u.error?"Offline or unavailable":"Stable",info?.updateAvailable?"success":u.error?"warn":"")+'</div>'+
+ '<div class="panel-body"><div class="toolbar" style="margin-bottom:8px">'+btn(u.checking?"Checking…":"Check for updates","check-updates","secondary",u.checking?"disabled":"")+
+ (canDownload?btn(u.downloading?"Downloading…":"Download update","download-update","primary",u.downloading?"disabled":""):"")+
+ (downloaded?btn("Open installer","open-update","primary"):"")+
+ btn("View releases","view-releases","quiet")+'</div>'+
+ (u.error?'<div class="notice warning" style="margin:12px 0">'+e(u.error)+'</div>':"")+
+ packageInfo+progress+
+ (downloaded?'<div class="notice" style="margin:12px 0"><strong>Downloaded and verified:</strong> '+e(downloaded.name)+'<div class="hint">SHA-256: '+e(downloaded.sha256)+'</div><div class="hint" style="word-break:break-all">'+e(downloaded.path)+'</div></div>':"")+
+ '<label class="checkbox-row" style="margin-top:20px"><input id="auto-updates" type="checkbox" '+(u.autoCheck?"checked":"")+'>Automatically check for updates when SoftClone starts</label>'+
+ '<p class="hint">Update checks are read-only. Downloading and opening an installer require your action. No background installation, forced restart or telemetry.</p></div></section>'+
+ '<section class="panel"><div class="panel-header"><h2>Release notes</h2></div><div class="panel-body">'+
+ (info?.releaseNotes?'<div class="release-notes">'+e(info.releaseNotes)+'</div>':'<p class="page-lead">Check for updates to load the latest stable release notes.</p>')+
+ '</div></section><div class="notice warning">Installer checksums protect against damaged or altered downloads relative to the official GitHub release, but they are not a substitute for Tauri updater signing. Fully automatic in-place updates require a privately held signing key and signed release artifacts.</div>';
+}
+async function downloadUpdate(){
+ if(S.update.downloading)return;
+ S.update.downloading=true;S.update.progress=null;S.update.downloaded=null;render();
+ const timer=setInterval(async()=>{
+  try{
+   const p=await api("update_download_progress");if(!p)return;
+   S.update.progress=p;
+   const fill=$("#update-progress-fill"),summary=$("#update-progress-text");
+   if(fill)fill.style.width=Math.min(100,Math.round(100*p.downloadedBytes/Math.max(1,p.totalBytes)))+"%";
+   if(summary)summary.textContent=bytes(p.downloadedBytes)+" / "+bytes(p.totalBytes);
+  }catch{}
+ },250);
+ try{
+  const download=await api("download_update");
+  S.update.downloaded=download;
+  alert("Update downloaded and SHA-256 verified.");
+ }catch(err){alert(err,true)}
+ finally{clearInterval(timer);S.update.downloading=false;S.update.progress=null;render()}
+}
+
 function render(){
- $$(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.page===S.page));
- $("#breadcrumb").textContent=({library:"MY CLONES",create:"CREATE CLONE",discover:"DISCOVER APPS",logs:"DEBUG LOGS",guide:"HOW IT WORKS",about:"ABOUT"})[S.page];
- $("#view").innerHTML=({library,create,discover,logs:logPage,guide,about})[S.page]();
+ $(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.page===S.page));
+ const indicator=$("#update-indicator");if(indicator)indicator.hidden=!S.update.info?.updateAvailable;
+ $("#breadcrumb").textContent=({library:"MY CLONES",create:"CREATE CLONE",discover:"DISCOVER APPS",logs:"DEBUG LOGS",guide:"HOW IT WORKS",about:"ABOUT",updates:"UPDATES"})[S.page];
+ $("#view").innerHTML=({library,create,discover,logs:logPage,guide,about,updates:updatePage})[S.page]();
  modalRender();
 }
 function modalRender(){
@@ -80,7 +143,10 @@ function modalRender(){
  if(!m){root.innerHTML="";return}
  const name=item(m.id)?.name||"";
  let body="",title="";
- if(m.type==="rename"||m.type==="duplicate"){
+ if(m.type==="updateInstall"){
+  title="Open verified installer";
+  body='<p>The downloaded package was verified against the official release checksum. SoftClone will now open the native installer, which may request administrator permissions or require you to close the application. There is no silent or unattended installation.</p>';
+ } else if(m.type==="rename"||m.type==="duplicate"){
   title=m.type==="rename"?"Rename clone":"Duplicate clone";
   body='<p>'+(m.type==="rename"?"Only the display label changes.":"A separate managed copy is created.")+'</p><label class="field-label" for="modal-name">New name</label><input class="input" id="modal-name" maxlength="64" value="'+e(m.name)+'">';
  } else if(m.type==="delete"){
@@ -90,11 +156,12 @@ function modalRender(){
   title="Restore backup";
   body='<p>This will replace managed clone files with an older snapshot.</p>'+(m.loading?"Loading backups…":m.backups.length?'<select id="restore-select" class="select" style="width:100%">'+m.backups.map(b=>'<option value="'+e(b.id)+'" '+(m.backupId===b.id?"selected":"")+'>'+e(date(b.created_epoch_secs))+' · '+bytes(b.copied_bytes)+'</option>').join("")+'</select>':'<div class="notice warning">No valid backups exist.</div>');
  } else {title="Clear diagnostic history";body="<p>Delete both active and archived diagnostic journals? Your clones are unaffected.</p>"}
- root.innerHTML='<div class="modal-backdrop"><div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">'+title+'</h2></div><div class="modal-body">'+body+'</div><div class="modal-actions">'+btn("Cancel","close-modal")+btn(m.type==="delete"?"Delete permanently":m.type==="restore"?"Restore snapshot":m.type==="clear"?"Clear logs":"Confirm","confirm",m.type==="delete"||m.type==="clear"?"danger":"primary",(m.type==="restore"&&(m.loading||!m.backups.length))?"disabled":"")+'</div></div></div>';
+ root.innerHTML='<div class="modal-backdrop"><div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">'+title+'</h2></div><div class="modal-body">'+body+'</div><div class="modal-actions">'+btn("Cancel","close-modal")+btn(m.type==="delete"?"Delete permanently":m.type==="restore"?"Restore snapshot":m.type==="clear"?"Clear logs":m.type==="updateInstall"?"Open installer":"Confirm","confirm",m.type==="delete"||m.type==="clear"?"danger":"primary",(m.type==="restore"&&(m.loading||!m.backups.length))?"disabled":"")+'</div></div></div>';
 }
 function page(p){
  S.page=p;S.query="";S.filter="all";S.modal=null;
  if(p==="discover"&&!S.scanned&&!S.scan)discovery();
+ else if(p==="updates"&&!S.update.checked&&!S.update.checking)checkUpdates(true);
  else if(p==="logs")logs().catch(err=>alert(err,true));
  else render();
 }
@@ -116,6 +183,12 @@ function openModal(type,id){
 }
 async function confirm(){
  const m=S.modal;if(!m)return;
+ if(m.type==="updateInstall"){
+  S.modal=null;modalRender();
+  await api("open_downloaded_update");
+  alert("Verified installer opened. Follow its native installation steps.");
+  return;
+ }
  if(m.type==="delete"&&m.name!==item(m.id)?.name)throw Error("Type the exact clone name");
  if(["rename","duplicate"].includes(m.type)&&!m.name.trim())throw Error("Name is required");
  if(m.type==="restore"&&!m.backups.length)throw Error("No backup selected");
@@ -147,6 +220,12 @@ async function action(a,el){
  switch(a){
   case "go-create":page("create");break;
   case "go-discover":page("discover");break;
+  case "go-updates":page("updates");break;
+  case "check-updates":await checkUpdates(false);break;
+  case "download-update":await downloadUpdate();break;
+  case "cancel-update":await api("cancel_update_download");alert("Cancelling update download…");break;
+  case "open-update":openModal("updateInstall","");break;
+  case "view-releases":await api("open_external",{target:"releases"});break;
   case "refresh":await load();break;
   case "refresh-logs":await logs();break;
   case "rescan":if(!S.scan)await discovery();break;
@@ -194,11 +273,12 @@ document.addEventListener("change",ev=>{
  else if(id==="isolated"){S.form.isolatedProfile=ev.target.checked;S.preflight=null}
  else if(["library-filter","discover-filter"].includes(id)){S.filter=ev.target.value;render()}
  else if(id==="logs-filter"){S.logFilter=ev.target.value;render()}
+ else if(id==="auto-updates"){S.update.autoCheck=ev.target.checked;try{localStorage.setItem("softclone.autoCheckUpdates",String(S.update.autoCheck))}catch{}render()}
  else if(id==="restore-select"&&S.modal){S.modal.backupId=ev.target.value}
 });
 document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&S.modal&&!S.busy){S.modal=null;modalRender()}});
 (async()=>{
  if(!invoke){$("#view").innerHTML=empty("Tauri desktop required","Start SoftClone through its native desktop application.");return}
- try{const [info,items]=await Promise.all([api("app_info"),api("list_instances")]);S.info=info;S.clones=items;$("#sidebar-count").textContent=items.length;$("#sidebar-version").textContent="VERSION "+info.version+" · TAURI 2";$("#platform-tag").textContent=info.os.toUpperCase();render()}
+ try{const [info,items]=await Promise.all([api("app_info"),api("list_instances")]);S.info=info;S.clones=items;$("#sidebar-count").textContent=items.length;$("#sidebar-version").textContent="VERSION "+info.version+" · TAURI 2";$("#platform-tag").textContent=info.os.toUpperCase();render();if(S.update.autoCheck)void checkUpdates(true)}
  catch(err){$("#view").innerHTML=empty("Workspace unavailable",String(err));alert(err,true)}
 })();
