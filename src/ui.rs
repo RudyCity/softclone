@@ -458,16 +458,9 @@ impl DesktopApp {
                 }
                 ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new("VERSION 0.5.2  •  LOCAL FIRST")
+                        RichText::new("VERSION 0.5.2  •  LOCAL")
                             .size(10.0)
                             .color(Color32::from_rgb(133, 154, 155)),
-                    );
-                    ui.add_space(10.0);
-                    ui.separator();
-                    ui.label(
-                        RichText::new("No account. No cloud sync.")
-                            .size(11.0)
-                            .color(Color32::from_rgb(157, 175, 176)),
                     );
                 });
             });
