@@ -1,6 +1,7 @@
 use eframe::egui::{
     self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, TextEdit, Vec2,
 };
+use crate::icons::{self, Icon};
 use softclone::{
     core::{self, CloneRecord, CloneRequest, RunMode},
     registry, rune_engine,
@@ -156,11 +157,7 @@ impl DesktopApp {
             .show(ctx, |ui| {
                 ui.add_space(16.0);
                 ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new("◧")
-                            .color(Color32::from_rgb(129, 200, 177))
-                            .size(28.0),
-                    );
+                    icons::inline(ui, Icon::Layers, 30.0, Color32::from_rgb(129, 200, 177));
                     ui.label(RichText::new("softclone").color(WHITE).size(23.0).strong());
                 });
                 ui.add_space(5.0);
@@ -177,13 +174,13 @@ impl DesktopApp {
                         .strong(),
                 );
                 ui.add_space(8.0);
-                if Self::nav_button(ui, "▦   My clones", self.page == Page::Library) {
+                if Self::nav_button(ui, Icon::Copy, "My clones", self.page == Page::Library) {
                     self.page = Page::Library;
                 }
-                if Self::nav_button(ui, "+   Create clone", self.page == Page::Create) {
+                if Self::nav_button(ui, Icon::SquarePlus, "Create clone", self.page == Page::Create) {
                     self.page = Page::Create;
                 }
-                if Self::nav_button(ui, "⌕   Discover apps", self.page == Page::Discover) {
+                if Self::nav_button(ui, Icon::ScanSearch, "Discover apps", self.page == Page::Discover) {
                     self.page = Page::Discover;
                     if self.discovered.is_empty() {
                         self.start_discovery();
@@ -197,7 +194,7 @@ impl DesktopApp {
                         .strong(),
                 );
                 ui.add_space(8.0);
-                if Self::nav_button(ui, "ⓘ   How it works", self.page == Page::About) {
+                if Self::nav_button(ui, Icon::Info, "How it works", self.page == Page::About) {
                     self.page = Page::About;
                 }
                 ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
@@ -217,28 +214,42 @@ impl DesktopApp {
             });
     }
 
-    fn nav_button(ui: &mut egui::Ui, label: &str, active: bool) -> bool {
+    fn nav_button(ui: &mut egui::Ui, icon: Icon, label: &str, active: bool) -> bool {
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::new(184.0, 42.0), egui::Sense::click());
         let fill = if active {
             Color32::from_rgb(46, 76, 75)
+        } else if response.hovered() {
+            Color32::from_rgb(32, 57, 60)
         } else {
             NAV
         };
-        ui.add_sized(
-            [184.0, 42.0],
-            egui::Button::new(
-                RichText::new(label)
-                    .color(if active {
-                        WHITE
-                    } else {
-                        Color32::from_rgb(183, 200, 201)
-                    })
-                    .size(13.5),
-            )
-            .fill(fill)
-            .stroke(Stroke::NONE)
-            .corner_radius(7),
-        )
-        .clicked()
+        let foreground = if active {
+            WHITE
+        } else {
+            Color32::from_rgb(183, 200, 201)
+        };
+        let painter = ui.painter();
+        painter.rect_filled(rect, CornerRadius::same(7), fill);
+        icons::draw(
+            painter,
+            icon,
+            egui::pos2(rect.left() + 23.0, rect.center().y),
+            18.0,
+            if active {
+                Color32::from_rgb(142, 213, 194)
+            } else {
+                foreground
+            },
+        );
+        painter.text(
+            egui::pos2(rect.left() + 48.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label,
+            egui::FontId::proportional(13.5),
+            foreground,
+        );
+        response.clicked()
     }
 
     fn stat(ui: &mut egui::Ui, value: &str, label: &str) {
@@ -282,7 +293,7 @@ impl DesktopApp {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if ui
                     .add(
-                        egui::Button::new(RichText::new("+  New clone").color(WHITE).strong())
+                        egui::Button::new(RichText::new("New clone").color(WHITE).strong())
                             .fill(ACCENT),
                     )
                     .clicked()
@@ -298,7 +309,7 @@ impl DesktopApp {
                     ui.set_min_height(172.0);
                     ui.vertical_centered(|ui| {
                         ui.add_space(13.0);
-                        ui.label(RichText::new("▣").size(38.0).color(ACCENT));
+                        icons::inline(ui, Icon::Layers, 38.0, ACCENT);
                         ui.add_space(6.0);
                         ui.label(RichText::new("A fresh workspace starts here").size(18.0).color(INK).strong());
                         ui.label(RichText::new("Create a local copy of an app you own, without touching the original.").color(MUTED));
@@ -322,7 +333,7 @@ impl DesktopApp {
                             .corner_radius(10)
                             .inner_margin(12)
                             .show(ui, |ui| {
-                                ui.label(RichText::new("◧").size(24.0).color(ACCENT));
+                                icons::inline(ui, Icon::Copy, 24.0, ACCENT);
                             });
                         ui.vertical(|ui| {
                             ui.label(RichText::new(&item.name).size(16.0).strong().color(INK));
@@ -392,6 +403,7 @@ impl DesktopApp {
                     .hint_text("Search installed applications")
                     .desired_width(390.0),
             );
+            icons::inline(ui, Icon::Search, 17.0, MUTED);
             if ui.button("Rescan").clicked() {
                 self.start_discovery();
             }
@@ -434,16 +446,23 @@ impl DesktopApp {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             ui.label(RichText::new(&app.name).size(15.0).strong().color(INK));
-                            ui.label(RichText::new(app.support.label()).size(12.0).color(ACCENT));
+                            ui.horizontal(|ui| {
+                                let status_icon = match app.support {
+                                    Support::ProfileAdapter => Icon::UserRoundCheck,
+                                    Support::CopyCandidate => Icon::Package,
+                                    Support::ReviewRequired => Icon::AlertTriangle,
+                                };
+                                icons::inline(ui, status_icon, 16.0, ACCENT);
+                                ui.label(RichText::new(app.support.label()).size(12.0).color(ACCENT));
+                            });
                             ui.label(RichText::new(&app.note).size(11.0).color(MUTED));
-                            ui.label(
-                                RichText::new(app.path.display().to_string())
-                                    .size(11.0)
-                                    .color(MUTED),
-                            );
+                            if !app.path.as_os_str().is_empty() {
+                                ui.label(RichText::new(app.path.display().to_string())
+                                    .size(11.0).color(MUTED));
+                            }
                         });
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui.button("Use this app").clicked() {
+                            if ui.add_enabled(app.launchable, egui::Button::new("Use this app")).on_disabled_hover_text("Executable could not be resolved from installed application metadata").clicked() {
                                 self.source = app.path.display().to_string();
                                 self.name = format!("{} copy", app.name);
                                 self.entrypoint.clear();
@@ -643,7 +662,8 @@ impl eframe::App for DesktopApp {
                                 .size(11.0),
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.label(RichText::new("● LOCAL").color(ACCENT).size(11.0).strong());
+                            icons::inline(ui, Icon::HardDrive, 15.0, ACCENT);
+                    ui.label(RichText::new("LOCAL").color(ACCENT).size(11.0).strong());
                         });
                     });
                     ui.add_space(20.0);
@@ -658,6 +678,7 @@ impl eframe::App for DesktopApp {
                             .inner_margin(13)
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
+                                    icons::inline(ui, if is_error { Icon::CircleAlert } else { Icon::CheckCircle }, 17.0, if is_error { Color32::from_rgb(160, 62, 48) } else { ACCENT });
                                     ui.label(RichText::new(message).size(12.5).color(
                                         if is_error {
                                             Color32::from_rgb(160, 62, 48)
