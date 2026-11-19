@@ -1038,13 +1038,43 @@ impl DesktopApp {
             let texture = self.app_icons.get(&app.path);
             #[cfg(not(target_os = "windows"))]
             let texture = None;
-            if discovery_form::app_card(ui, &app, texture) {
-                self.source = app.path.display().to_string();
-                self.name = format!("{} copy", app.name);
-                self.entrypoint.clear();
-                self.profile_only = app.support != Support::CopyCandidate;
-                self.isolated = true;
-                self.page = Page::Create;
+            match discovery_form::app_card(ui, &app, texture) {
+                Some(discovery_form::AppCardAction::UseApp) => {
+                    self.source = app.path.display().to_string();
+                    self.name = format!("{} copy", app.name);
+                    self.entrypoint.clear();
+                    self.profile_only = app.support != Support::CopyCandidate;
+                    self.isolated = true;
+                    self.page = Page::Create;
+                }
+                Some(discovery_form::AppCardAction::LocateExecutable) => {
+                    let selected = rfd::FileDialog::new()
+                        .set_title(format!("Locate executable for {}", app.name))
+                        .add_filter("Application executable", &["exe"])
+                        .pick_file();
+                    if let Some(path) = selected {
+                        if path.is_file()
+                            && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+                        {
+                            self.source = path.display().to_string();
+                            self.name = format!("{} copy", app.name);
+                            self.entrypoint.clear();
+                            self.profile_only = true;
+                            self.isolated = true;
+                            self.page = Page::Create;
+                            self.notice = Some((
+                                "Executable selected manually. Independent profiles for this program are not guaranteed; review the instance strategy before cloning.".into(),
+                                false,
+                            ));
+                        } else {
+                            self.notice = Some((
+                                "Select the application's primary .exe file, not an installer, plugin or shortcut.".into(),
+                                true,
+                            ));
+                        }
+                    }
+                }
+                None => {}
             }
             ui.add_space(8.0);
         }
