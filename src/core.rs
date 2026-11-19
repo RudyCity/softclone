@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
+    io::{Read, Write},
     path::{Component, Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
     process::{Child, Command},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -17,6 +19,8 @@ pub enum CloneError {
     Io(#[from] std::io::Error),
     #[error("cannot copy symbolic links: {0}")]
     Link(String),
+    #[error("Clone cancelled; incomplete files were discarded")]
+    Cancelled,
 }
 
 pub type Result<T> = std::result::Result<T, CloneError>;
@@ -209,9 +213,149 @@ pub fn prepare(request: &CloneRequest) -> Result<Prepared> {
     })
 }
 
-fn checked_copy_dir(source: &Path, destination: &Path) -> Result<u64> {
-    let mut bytes = 0u64;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CopyPlan {
+    pub total_bytes: u64,
+    pub total_files: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct CopyProgress {
+    pub copied_bytes: u64,
+    pub total_bytes: u64,
+    pub completed_files: u64,
+    pub total_files: u64,
+    pub current_file: String,
+}
+
+fn abort_if_cancelled(cancel: &AtomicBool) -> Result<()> {
+    if cancel.load(Ordering::Relaxed) {
+        Err(CloneError::Cancelled)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_source_link(source: &Path, path: &Path) -> Result<()> {
+    let link = fs::read_link(path)?;
+    let resolved = fs::canonicalize(path)?;
+    if link.is_absolute() || !resolved.starts_with(source) {
+        return Err(CloneError::Link(path.display().to_string()));
+    }
+    #[cfg(not(unix))]
+    return Err(CloneError::Link(path.display().to_string()));
+    #[cfg(unix)]
+    Ok(())
+}
+
+/// Inspects source files without modifying the source or destination.
+/// Estimates byte count and validates internal symlinks, failing closed on
+/// special files and paths that escape the source root.
+pub fn analyze(prepared: &Prepared) -> Result<CopyPlan> {
+    if prepared.source.is_file() {
+        return Ok(CopyPlan {
+            total_bytes: fs::metadata(&prepared.source)?.len(),
+            total_files: 1,
+        });
+    }
+    let mut plan = CopyPlan::default();
+    for item in WalkDir::new(&prepared.source).follow_links(false) {
+        let item = item.map_err(std::io::Error::other)?;
+        if item.file_type().is_symlink() {
+            validate_source_link(&prepared.source, item.path())?;
+        } else if item.file_type().is_file() {
+            plan.total_bytes = plan
+                .total_bytes
+                .saturating_add(fs::metadata(item.path())?.len());
+            plan.total_files = plan.total_files.saturating_add(1);
+        } else if !item.file_type().is_dir() {
+            return Err(CloneError::Invalid(format!(
+                "Unsupported special file: {}",
+                item.path().display()
+            )));
+        }
+    }
+    Ok(plan)
+}
+
+fn copy_file_with_progress<F>(
+    source: &Path,
+    to: &Path,
+    cancel: &AtomicBool,
+    plan: CopyPlan,
+    copied_bytes: &mut u64,
+    completed_files: &mut u64,
+    progress: &mut F,
+) -> Result<()>
+where
+    F: FnMut(CopyProgress),
+{
+    abort_if_cancelled(cancel)?;
+    if !fs::symlink_metadata(source)?.file_type().is_file() {
+        return Err(CloneError::Invalid(format!(
+            "Source changed during copy: {}",
+            source.display()
+        )));
+    }
+    let mut input = fs::File::open(source)?;
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(to)?;
+    let mut buffer = [0u8; 256 * 1024];
+    let current_file = source
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let mut since_report = 0u64;
+    loop {
+        abort_if_cancelled(cancel)?;
+        let count = input.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        output.write_all(&buffer[..count])?;
+        *copied_bytes = copied_bytes.saturating_add(count as u64);
+        since_report += count as u64;
+        if since_report >= 2 * 1024 * 1024 {
+            progress(CopyProgress {
+                copied_bytes: *copied_bytes,
+                total_bytes: plan.total_bytes,
+                completed_files: *completed_files,
+                total_files: plan.total_files,
+                current_file: current_file.clone(),
+            });
+            since_report = 0;
+        }
+    }
+    output.flush()?;
+    fs::set_permissions(to, fs::metadata(source)?.permissions())?;
+    *completed_files = completed_files.saturating_add(1);
+    progress(CopyProgress {
+        copied_bytes: *copied_bytes,
+        total_bytes: plan.total_bytes,
+        completed_files: *completed_files,
+        total_files: plan.total_files,
+        current_file,
+    });
+    Ok(())
+}
+
+fn checked_copy_dir<F>(
+    source: &Path,
+    destination: &Path,
+    cancel: &AtomicBool,
+    plan: CopyPlan,
+    copied_bytes: &mut u64,
+    completed_files: &mut u64,
+    progress: &mut F,
+) -> Result<()>
+where
+    F: FnMut(CopyProgress),
+{
     for item in WalkDir::new(source).follow_links(false) {
+        abort_if_cancelled(cancel)?;
         let item = item.map_err(std::io::Error::other)?;
         let relative = item
             .path()
@@ -219,19 +363,23 @@ fn checked_copy_dir(source: &Path, destination: &Path) -> Result<u64> {
             .map_err(|e| CloneError::Invalid(e.to_string()))?;
         let to = destination.join(relative);
         if item.file_type().is_symlink() {
-            let link = fs::read_link(item.path())?;
-            let resolved = fs::canonicalize(item.path())?;
-            if link.is_absolute() || !resolved.starts_with(source) {
-                return Err(CloneError::Link(item.path().display().to_string()));
-            }
+            validate_source_link(source, item.path())?;
             #[cfg(unix)]
-            std::os::unix::fs::symlink(&link, &to)?;
+            std::os::unix::fs::symlink(fs::read_link(item.path())?, &to)?;
             #[cfg(not(unix))]
             return Err(CloneError::Link(item.path().display().to_string()));
         } else if item.file_type().is_dir() {
             fs::create_dir_all(&to)?;
         } else if item.file_type().is_file() {
-            bytes = bytes.saturating_add(fs::copy(item.path(), to)?);
+            copy_file_with_progress(
+                item.path(),
+                &to,
+                cancel,
+                plan,
+                copied_bytes,
+                completed_files,
+                progress,
+            )?;
         } else {
             return Err(CloneError::Invalid(format!(
                 "Unsupported special file: {}",
@@ -239,11 +387,26 @@ fn checked_copy_dir(source: &Path, destination: &Path) -> Result<u64> {
             )));
         }
     }
-    Ok(bytes)
+    Ok(())
 }
 
-/// Clones portable application files into a fresh directory. Does not copy profiles.
+/// Backward-compatible copy API; uses the same staged, validated engine.
 pub fn create_clone(prepared: &Prepared, library_dir: &Path) -> Result<CloneRecord> {
+    create_clone_with_progress(prepared, library_dir, &AtomicBool::new(false), |_| {})
+}
+
+/// A cancellable copy that reports real byte/file progress. Temporary staging
+/// files are deleted on any error or cancellation; no registry record is added.
+pub fn create_clone_with_progress<F>(
+    prepared: &Prepared,
+    library_dir: &Path,
+    cancel: &AtomicBool,
+    mut progress: F,
+) -> Result<CloneRecord>
+where
+    F: FnMut(CopyProgress),
+{
+    abort_if_cancelled(cancel)?;
     // Guard before creating directories so a nested destination never mutates the source.
     let mut ancestor = library_dir;
     while !ancestor.exists() {
@@ -268,6 +431,8 @@ pub fn create_clone(prepared: &Prepared, library_dir: &Path) -> Result<CloneReco
             "Source must be outside managed clone library.".into(),
         ));
     }
+    let plan = analyze(prepared)?;
+    abort_if_cancelled(cancel)?;
     let id = Uuid::new_v4();
     let slug: String = prepared
         .name
@@ -285,39 +450,50 @@ pub fn create_clone(prepared: &Prepared, library_dir: &Path) -> Result<CloneReco
     let root = library_dir.join(format!("{slug}-{id}"));
     let staging = library_dir.join(format!(".{slug}-{id}.partial"));
     fs::create_dir(&staging)?;
-    let outcome = (|| -> Result<u64> {
+    let mut copied_bytes = 0u64;
+    let mut completed_files = 0u64;
+    let outcome = (|| -> Result<()> {
+        abort_if_cancelled(cancel)?;
         let payload = staging.join("payload");
         fs::create_dir(&payload)?;
-        let bytes = if is_app_bundle(&prepared.source) {
+        if is_app_bundle(&prepared.source) {
             let bundle = prepared
                 .source
                 .file_name()
                 .ok_or_else(|| CloneError::Invalid("Missing app bundle name".into()))?;
-            checked_copy_dir(&prepared.source, &payload.join(bundle))?
+            checked_copy_dir(
+                &prepared.source, &payload.join(bundle), cancel, plan,
+                &mut copied_bytes, &mut completed_files, &mut progress,
+            )?;
         } else if prepared.source.is_dir() {
-            checked_copy_dir(&prepared.source, &payload)?
+            checked_copy_dir(
+                &prepared.source, &payload, cancel, plan,
+                &mut copied_bytes, &mut completed_files, &mut progress,
+            )?;
         } else {
             let name = prepared
                 .source
                 .file_name()
                 .ok_or_else(|| CloneError::Invalid("Invalid filename".into()))?;
-            fs::copy(&prepared.source, payload.join(name))?
-        };
+            copy_file_with_progress(
+                &prepared.source, &payload.join(name), cancel, plan,
+                &mut copied_bytes, &mut completed_files, &mut progress,
+            )?;
+        }
+        abort_if_cancelled(cancel)?;
         if prepared.isolated_profile {
             for sub in ["config", "data", "cache", "roaming", "local"] {
                 fs::create_dir_all(staging.join("profile").join(sub))?;
             }
         }
+        abort_if_cancelled(cancel)?;
         fs::rename(&staging, &root)?;
-        Ok(bytes)
+        Ok(())
     })();
-    let copied_bytes = match outcome {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            let _ = fs::remove_dir_all(&staging);
-            return Err(error);
-        }
-    };
+    if let Err(error) = outcome {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(error);
+    }
     Ok(CloneRecord {
         id,
         name: prepared.name.clone(),
