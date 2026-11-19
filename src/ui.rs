@@ -1,13 +1,16 @@
-use crate::components::{create_form::CreateForm, discovery_form};
+use crate::components::{create_form::CreateForm, discovery_form, instance_card::{self, Action as InstanceAction}};
 use crate::icons::{self, Icon};
 use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2};
 use softclone::{
     core::{self, CloneRecord, CloneRequest, CopyPlan, CopyProgress, RunMode},
+    instance_manager::{self, BackupInfo},
     registry,
     universal::{self, AppFilter, DiscoveredApp, Support},
 };
 use std::{
+    collections::HashMap,
     path::PathBuf,
+    process::Child,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver},
@@ -15,6 +18,7 @@ use std::{
     },
     time::Duration,
 };
+use uuid::Uuid;
 
 const INK: Color32 = Color32::from_rgb(24, 34, 43);
 const MUTED: Color32 = Color32::from_rgb(112, 123, 132);
@@ -45,6 +49,20 @@ enum CloneEvent {
     Finished(Result<CloneRecord, String>),
 }
 
+#[derive(Clone)]
+enum PendingManager {
+    Rename(Uuid),
+    Restore(Uuid),
+    Delete(Uuid),
+}
+
+enum ManagerWork {
+    Rename(String),
+    Backup,
+    Restore(Uuid),
+    Delete,
+}
+
 pub struct DesktopApp {
     page: Page,
     items: Vec<CloneRecord>,
@@ -69,6 +87,14 @@ pub struct DesktopApp {
     analysis_worker: Option<Receiver<(String, Result<CopyPlan, String>)>>,
     analysis: Option<(String, CopyPlan)>,
     notice: Option<(String, bool)>,
+    processes: HashMap<Uuid, Child>,
+    manager_worker: Option<Receiver<Result<String, String>>>,
+    manager_busy: Option<(Uuid, String)>,
+    pending_manager: Option<PendingManager>,
+    manager_name: String,
+    confirm_name: String,
+    restore_options: Vec<BackupInfo>,
+    restore_selected: Option<Uuid>,
 }
 
 impl DesktopApp {
@@ -113,6 +139,14 @@ impl DesktopApp {
             analysis_worker: None,
             analysis: None,
             notice,
+            processes: HashMap::new(),
+            manager_worker: None,
+            manager_busy: None,
+            pending_manager: None,
+            manager_name: String::new(),
+            confirm_name: String::new(),
+            restore_options: Vec::new(),
+            restore_selected: None,
         }
     }
 
@@ -488,9 +522,9 @@ impl DesktopApp {
             ui,
             "Workspace overview",
             "Your clone library",
-            "Independent copies, managed in one quiet place.",
+            "Manage copies, profiles, snapshots and tracked app processes.",
         );
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             Self::stat(ui, &self.items.len().to_string(), "Total clones");
             let bytes: u64 = self.items.iter().map(|x| x.copied_bytes).sum();
             Self::stat(ui, &format_size(bytes), "Copied files");
@@ -505,7 +539,7 @@ impl DesktopApp {
                 "Separate profiles",
             );
         });
-        ui.add_space(30.0);
+        ui.add_space(26.0);
         ui.horizontal(|ui| {
             ui.label(RichText::new("Applications").color(INK).size(19.0).strong());
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -520,83 +554,336 @@ impl DesktopApp {
                 }
             });
         });
+        ui.add_space(10.0);
+        crate::components::fields::helper(
+            ui,
+            "Process controls apply only to apps launched during this SoftClone session. Backups copy the managed instance folder, never the original installation.",
+        );
+        if let Some((_, task)) = &self.manager_busy {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new().size(15.0));
+                ui.label(RichText::new(format!("{task}…")).color(ACCENT));
+            });
+        }
         ui.add_space(12.0);
         if self.items.is_empty() {
-            Frame::new().fill(WHITE).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(12)
-                .inner_margin(30).show(ui, |ui| {
+            Frame::new()
+                .fill(WHITE)
+                .stroke(Stroke::new(1.0_f32, LINE))
+                .corner_radius(12)
+                .inner_margin(30)
+                .show(ui, |ui| {
                     ui.set_min_height(172.0);
                     ui.vertical_centered(|ui| {
                         ui.add_space(13.0);
                         icons::inline(ui, Icon::Layers, 38.0, ACCENT);
                         ui.add_space(6.0);
                         ui.label(RichText::new("A fresh workspace starts here").size(18.0).color(INK).strong());
-                        ui.label(RichText::new("Create a local copy of an app you own, without touching the original.").color(MUTED));
+                        ui.label(RichText::new("Create a local app instance without modifying the original.").color(MUTED));
                         ui.add_space(10.0);
-                        if icons::button(ui, Icon::SquarePlus, "Create your first clone", Some(ACCENT)).clicked() { self.page = Page::Create; }
+                        if icons::button(ui, Icon::SquarePlus, "Create your first clone", Some(ACCENT)).clicked() {
+                            self.page = Page::Create;
+                        }
                     });
                 });
             return;
         }
-        let cards = self.items.clone();
-        for item in cards {
-            Frame::new()
-                .fill(WHITE)
-                .stroke(Stroke::new(1.0_f32, LINE))
-                .corner_radius(12)
-                .inner_margin(18)
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        Frame::new()
-                            .fill(Color32::from_rgb(232, 244, 238))
-                            .corner_radius(10)
-                            .inner_margin(12)
-                            .show(ui, |ui| {
-                                icons::inline(ui, Icon::Copy, 24.0, ACCENT);
+        let busy = self.manager_worker.is_some() || self.worker.is_some();
+        for record in self.items.clone() {
+            let pid = self.processes.get(&record.id).map(Child::id);
+            if let Some(action) = instance_card::show(ui, &record, pid, busy) {
+                self.on_instance_action(&record, action);
+            }
+            ui.add_space(8.0);
+        }
+    }
+
+    fn tick_processes(&mut self, ctx: &egui::Context) {
+        let mut finished = Vec::new();
+        for (id, child) in &mut self.processes {
+            match child.try_wait() {
+                Ok(Some(_)) => finished.push(*id),
+                Err(error) => {
+                    self.notice = Some((format!("Cannot inspect managed process: {error}"), true));
+                    finished.push(*id);
+                }
+                Ok(None) => {}
+            }
+        }
+        for id in finished {
+            self.processes.remove(&id);
+        }
+        if !self.processes.is_empty() {
+            ctx.request_repaint_after(Duration::from_secs(2));
+        }
+    }
+
+    fn stop_managed_process(&mut self, id: Uuid) -> Result<(), String> {
+        let Some(mut child) = self.processes.remove(&id) else {
+            return Err("No managed process is tracked for this instance.".into());
+        };
+        match child.try_wait() {
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => {
+                if let Err(error) = child.kill() {
+                    self.processes.insert(id, child);
+                    return Err(format!("Could not stop managed process: {error}"));
+                }
+                child.wait().map_err(|error| error.to_string())?;
+                Ok(())
+            }
+            Err(error) => {
+                self.processes.insert(id, child);
+                Err(format!("Could not inspect process before stopping it: {error}"))
+            }
+        }
+    }
+
+    fn launch_managed(&mut self, record: &CloneRecord) {
+        if self.processes.contains_key(&record.id) {
+            self.notice = Some(("Instance is already running in this session.".into(), true));
+            return;
+        }
+        match core::launch(record) {
+            Ok(child) => {
+                let pid = child.id();
+                self.processes.insert(record.id, child);
+                self.notice = Some((
+                    format!("Launched {} (tracked PID {pid}).", record.name),
+                    false,
+                ));
+            }
+            Err(error) => {
+                self.notice = Some((format!("Launch failed: {error}"), true));
+            }
+        }
+    }
+
+    fn start_manager_work(&mut self, record: CloneRecord, work: ManagerWork) {
+        if self.manager_worker.is_some() || self.worker.is_some() {
+            self.notice = Some(("Finish the current operation first.".into(), true));
+            return;
+        }
+        if self.processes.contains_key(&record.id) && !matches!(&work, ManagerWork::Rename(_)) {
+            self.notice = Some(("Stop the tracked app before backup, restore or delete.".into(), true));
+            return;
+        }
+        let label = match &work {
+            ManagerWork::Rename(_) => "Renaming",
+            ManagerWork::Backup => "Backing up",
+            ManagerWork::Restore(_) => "Restoring snapshot",
+            ManagerWork::Delete => "Deleting instance",
+        };
+        self.manager_busy = Some((record.id, label.into()));
+        let (tx, rx) = mpsc::channel();
+        self.manager_worker = Some(rx);
+        std::thread::spawn(move || {
+            let library = registry::library_dir();
+            let backups = registry::backups_dir();
+            let database = registry::registry_file();
+            let result = match work {
+                ManagerWork::Rename(name) => instance_manager::rename(&record, &name, &database)
+                    .map(|()| format!("Renamed instance to {name}.")),
+                ManagerWork::Backup => instance_manager::backup(
+                    &record, &library, &backups, &database,
+                )
+                .map(|info| format!(
+                    "Backup created: {} files, {}.",
+                    info.files,
+                    format_size(info.copied_bytes),
+                )),
+                ManagerWork::Restore(id) => instance_manager::restore(
+                    &record, id, &library, &backups, &database,
+                )
+                .map(|()| format!("Restored snapshot for {}.", record.name)),
+                ManagerWork::Delete => instance_manager::delete(
+                    &record, &library, &database,
+                )
+                .map(|()| format!("Deleted managed instance {}.", record.name)),
+            }
+            .map_err(|error| error.to_string());
+            let _ = tx.send(result);
+        });
+    }
+
+    fn tick_manager(&mut self, ctx: &egui::Context) {
+        let Some(worker) = &self.manager_worker else {
+            return;
+        };
+        let result = worker.try_recv();
+        match result {
+            Ok(outcome) => {
+                self.manager_worker = None;
+                self.manager_busy = None;
+                let registry_reload = registry::load(&registry::registry_file());
+                if let Ok(items) = registry_reload {
+                    self.items = items;
+                } else if let Err(error) = registry_reload {
+                    self.notice = Some((format!("Could not reload instance registry: {error}"), true));
+                    return;
+                }
+                match outcome {
+                    Ok(message) => self.notice = Some((message, false)),
+                    Err(error) => self.notice = Some((error, true)),
+                }
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.manager_worker = None;
+                self.manager_busy = None;
+                self.notice = Some(("Instance manager worker disconnected.".into(), true));
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                ctx.request_repaint_after(Duration::from_millis(130));
+            }
+        }
+    }
+
+    fn on_instance_action(&mut self, record: &CloneRecord, action: InstanceAction) {
+        match action {
+            InstanceAction::Launch => self.launch_managed(record),
+            InstanceAction::Stop => {
+                match self.stop_managed_process(record.id) {
+                    Ok(()) => self.notice = Some((format!("Stopped {}.", record.name), false)),
+                    Err(error) => self.notice = Some((error, true)),
+                }
+            }
+            InstanceAction::Restart => {
+                match self.stop_managed_process(record.id) {
+                    Ok(()) => self.launch_managed(record),
+                    Err(error) => self.notice = Some((error, true)),
+                }
+            }
+            InstanceAction::OpenFolder => {
+                if let Err(error) = core::open_folder(&record.root) {
+                    self.notice = Some((format!("Cannot open folder: {error}"), true));
+                }
+            }
+            InstanceAction::Rename => {
+                self.manager_name = record.name.clone();
+                self.pending_manager = Some(PendingManager::Rename(record.id));
+            }
+            InstanceAction::Backup => self.start_manager_work(record.clone(), ManagerWork::Backup),
+            InstanceAction::Restore => {
+                if self.processes.contains_key(&record.id) {
+                    self.notice = Some(("Stop this instance before restoring a snapshot.".into(), true));
+                    return;
+                }
+                match instance_manager::list_backups(&registry::backups_dir(), record.id) {
+                    Ok(options) if options.is_empty() => {
+                        self.notice = Some(("No snapshot found for this instance. Create a backup first.".into(), true));
+                    }
+                    Ok(options) => {
+                        self.restore_selected = Some(options[0].id);
+                        self.restore_options = options;
+                        self.pending_manager = Some(PendingManager::Restore(record.id));
+                    }
+                    Err(error) => self.notice = Some((format!("Cannot read backups: {error}"), true)),
+                }
+            }
+            InstanceAction::Delete => {
+                if self.processes.contains_key(&record.id) {
+                    self.notice = Some(("Stop this instance before deleting it.".into(), true));
+                    return;
+                }
+                self.confirm_name.clear();
+                self.pending_manager = Some(PendingManager::Delete(record.id));
+            }
+        }
+    }
+
+    fn manager_dialog(&mut self, ctx: &egui::Context) {
+        let Some(pending) = self.pending_manager.clone() else {
+            return;
+        };
+        let id = match &pending {
+            PendingManager::Rename(id)
+            | PendingManager::Restore(id)
+            | PendingManager::Delete(id) => *id,
+        };
+        let Some(record) = self.items.iter().find(|item| item.id == id).cloned() else {
+            self.pending_manager = None;
+            return;
+        };
+        let title = match pending {
+            PendingManager::Rename(_) => "Rename instance",
+            PendingManager::Restore(_) => "Restore snapshot",
+            PendingManager::Delete(_) => "Delete instance",
+        };
+        let mut close = false;
+        let mut execute = None;
+        egui::Window::new(title)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .default_width(420.0)
+            .show(ctx, |ui| {
+                ui.label(RichText::new(&record.name).strong().color(INK));
+                match pending {
+                    PendingManager::Rename(_) => {
+                        ui.label("Change the display label. Files and folders will not move.");
+                        ui.text_edit_singleline(&mut self.manager_name);
+                        let valid = core::validate_name(&self.manager_name).is_ok();
+                        if ui.add_enabled(valid, egui::Button::new("Save name")).clicked() {
+                            execute = Some(ManagerWork::Rename(self.manager_name.clone()));
+                        }
+                    }
+                    PendingManager::Restore(_) => {
+                        ui.label("This replaces the managed instance folder with the selected snapshot.");
+                        ui.label("The original installed application is not modified. Stop apps before restoring.");
+                        egui::ComboBox::from_label("Backup snapshot")
+                            .selected_text(
+                                self.restore_selected
+                                    .map(|id| id.to_string())
+                                    .unwrap_or_else(|| "Select snapshot".into()),
+                            )
+                            .show_ui(ui, |ui| {
+                                for option in &self.restore_options {
+                                    ui.selectable_value(
+                                        &mut self.restore_selected,
+                                        Some(option.id),
+                                        format!(
+                                            "{} · {} files · {}",
+                                            &option.id.to_string()[..8],
+                                            option.files,
+                                            format_size(option.copied_bytes)
+                                        ),
+                                    );
+                                }
                             });
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new(&item.name).size(16.0).strong().color(INK));
-                            ui.label(
-                                RichText::new(format!(
-                                    "{}  ·  {}",
-                                    format_size(item.copied_bytes),
-                                    if item.run_mode == RunMode::ProfileOnly {
-                                        "Installed app · profile-only"
-                                    } else if item.isolated_profile {
-                                        "Portable copy · separate profile"
-                                    } else {
-                                        "Portable copy"
-                                    }
-                                ))
-                                .size(12.0)
-                                .color(MUTED),
-                            );
-                            ui.label(
-                                RichText::new(item.source.display().to_string())
-                                    .size(11.0)
-                                    .color(MUTED),
-                            );
-                        });
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if icons::button(ui, Icon::Play, "Launch", Some(ACCENT)).clicked() {
-                                match core::launch(&item) {
-                                    Ok(_) => {
-                                        self.notice =
-                                            Some((format!("Launched {}.", item.name), false))
-                                    }
-                                    Err(e) => {
-                                        self.notice = Some((format!("Launch failed: {e}"), true))
-                                    }
-                                }
+                        if ui.add_enabled(self.restore_selected.is_some(), egui::Button::new("Restore selected snapshot")).clicked() {
+                            if let Some(id) = self.restore_selected {
+                                execute = Some(ManagerWork::Restore(id));
                             }
-                            if icons::button(ui, Icon::FolderOpen, "Open folder", None).clicked() {
-                                if let Err(e) = core::open_folder(&item.root) {
-                                    self.notice = Some((format!("Cannot open folder: {e}"), true));
-                                }
-                            }
-                        });
-                    });
-                });
-            ui.add_space(7.0);
+                        }
+                    }
+                    PendingManager::Delete(_) => {
+                        ui.label(
+                            RichText::new("This permanently deletes SoftClone-managed instance files and removes its registry entry.")
+                                .color(Color32::from_rgb(160, 62, 48)),
+                        );
+                        ui.label("Backups are retained. Original installed application files are not deleted.");
+                        ui.label("Type the exact instance name to confirm:");
+                        ui.text_edit_singleline(&mut self.confirm_name);
+                        if ui
+                            .add_enabled(
+                                self.confirm_name == record.name,
+                                egui::Button::new("Delete managed instance"),
+                            )
+                            .clicked()
+                        {
+                            execute = Some(ManagerWork::Delete);
+                        }
+                    }
+                }
+                if ui.button("Cancel").clicked() {
+                    close = true;
+                }
+            });
+        if close {
+            self.pending_manager = None;
+        } else if let Some(work) = execute {
+            self.pending_manager = None;
+            self.start_manager_work(record, work);
         }
     }
 
@@ -873,6 +1160,8 @@ impl DesktopApp {
 impl eframe::App for DesktopApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.tick_worker(ctx);
+        self.tick_manager(ctx);
+        self.tick_processes(ctx);
         self.tick_analysis(ctx);
         self.tick_discovery(ctx);
         #[cfg(target_os = "windows")]
@@ -947,6 +1236,7 @@ impl eframe::App for DesktopApp {
                     ui.add_space(36.0);
                 });
             });
+        self.manager_dialog(ctx);
     }
 }
 
