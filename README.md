@@ -50,4 +50,4 @@ SoftClone **does not** bypass activation, software licenses, DRM, signatures, pl
 
 All clone files and diagnostic logs stay on the local device. Backups may contain private application data and are not encrypted. There is no background telemetry. Third-party software retains its own license.
 
-See [architecture](docs/architecture.md), [design system](docs/design-system.md) and [Tauri migration notes](docs/releases/v0.6.0.md).
+See [architecture](docs/architecture.md), [design system](docs/design-system.md) and [Tauri migration notes](docs/releases/v0.6.1.md).
