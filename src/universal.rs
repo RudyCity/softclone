@@ -426,7 +426,16 @@ mod tests {
     use super::*;
     #[test]
     fn filtering_respects_readiness_and_metadata() {
-        let mut app = candidate("Example Editor".into(), PathBuf::from("example"), true);
+        let mut app = DiscoveredApp {
+            name: "Example Editor".into(),
+            path: PathBuf::from("example"),
+            support: Support::ReviewRequired,
+            note: String::new(),
+            origin: "Test",
+            launchable: false,
+            publisher: None,
+            version: None,
+        };
         app.publisher = Some("Acme Software".into());
         app.version = Some("8.4".into());
         app.launchable = false;

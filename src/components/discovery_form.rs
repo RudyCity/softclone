@@ -121,6 +121,18 @@ fn app_details(ui: &mut Ui, app: &DiscoveredApp) {
                 .color(fields::ACCENT),
         );
     });
+    if app.publisher.is_some() || app.version.is_some() {
+        let publisher = app.publisher.as_deref().unwrap_or("Unknown publisher");
+        let version = app.version.as_deref().unwrap_or("Version not provided");
+        ui.add(
+            Label::new(
+                RichText::new(format!("{publisher}  ·  {version}"))
+                    .size(12.0)
+                    .color(fields::INK),
+            )
+            .wrap(),
+        );
+    }
     fields::helper(ui, app.origin);
     fields::helper(ui, &app.note);
     if !app.path.as_os_str().is_empty() {
@@ -143,7 +155,21 @@ fn choose_button(ui: &mut Ui, app: &DiscoveredApp) -> bool {
         .clicked()
 }
 
-pub fn app_card(ui: &mut Ui, app: &DiscoveredApp) -> bool {
+
+fn app_avatar(ui: &mut Ui, texture: Option<&egui::TextureHandle>) {
+    Frame::new()
+        .fill(Color32::from_rgb(239, 246, 243))
+        .corner_radius(10)
+        .inner_margin(egui::Margin::same(8))
+        .show(ui, |ui| {
+            if let Some(icon) = texture {
+                ui.add(egui::Image::new((icon.id(), egui::Vec2::splat(34.0))));
+            } else {
+                icons::inline(ui, Icon::Package, 34.0, fields::ACCENT);
+            }
+        });
+}
+pub fn app_card(ui: &mut Ui, app: &DiscoveredApp, texture: Option<&egui::TextureHandle>) -> bool {
     Frame::new()
         .fill(Color32::WHITE)
         .stroke(egui::Stroke::new(1.0_f32, fields::BORDER))
@@ -153,8 +179,9 @@ pub fn app_card(ui: &mut Ui, app: &DiscoveredApp) -> bool {
             let width = ui.available_width();
             if width >= 560.0 {
                 ui.horizontal(|ui| {
+                    app_avatar(ui, texture);
                     ui.vertical(|ui| {
-                        ui.set_max_width((width - 155.0).max(220.0));
+                        ui.set_max_width((width - 210.0).max(190.0));
                         app_details(ui, app);
                     });
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -165,7 +192,10 @@ pub fn app_card(ui: &mut Ui, app: &DiscoveredApp) -> bool {
                 .inner
             } else {
                 ui.vertical(|ui| {
-                    app_details(ui, app);
+                    ui.horizontal(|ui| {
+                        app_avatar(ui, texture);
+                        ui.vertical(|ui| app_details(ui, app));
+                    });
                     ui.add_space(8.0);
                     choose_button(ui, app)
                 })

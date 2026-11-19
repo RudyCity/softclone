@@ -18,6 +18,8 @@ pub struct CreateForm<'a> {
 #[derive(Default)]
 pub struct CreateFormAction {
     pub submit: bool,
+    pub browse_file: bool,
+    pub browse_folder: bool,
     pub error: Option<String>,
 }
 
@@ -31,7 +33,9 @@ impl CreateForm<'_> {
             .show(ui, |ui| {
                 ui.set_max_width(740.0);
                 let mut action = CreateFormAction::default();
-                self.source_section(ui);
+                let (browse_file, browse_folder) = self.source_section(ui);
+                action.browse_file = browse_file;
+                action.browse_folder = browse_folder;
                 fields::divider(ui);
                 action.error = self.details_section(ui);
                 fields::divider(ui);
@@ -43,7 +47,7 @@ impl CreateForm<'_> {
             .inner
     }
 
-    fn source_section(&mut self, ui: &mut Ui) {
+    fn source_section(&mut self, ui: &mut Ui) -> (bool, bool) {
         fields::section(ui, "01", "SOURCE APPLICATION");
         fields::text_field(
             ui,
@@ -52,6 +56,13 @@ impl CreateForm<'_> {
             Some("Choose an executable, portable folder, AppImage, or macOS .app bundle."),
             self.source,
         );
+        let mut browse_file = false;
+        let mut browse_folder = false;
+        ui.horizontal_wrapped(|ui| {
+            browse_file = icons::button(ui, Icon::FolderOpen, "Choose executable", None).clicked();
+            browse_folder = icons::button(ui, Icon::FolderOpen, "Choose folder", None).clicked();
+        });
+        (browse_file, browse_folder)
     }
 
     fn details_section(&mut self, ui: &mut Ui) -> Option<String> {
