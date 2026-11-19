@@ -11,11 +11,23 @@ fn migration_has_native_tauri_shell_and_no_egui_dependency() {
     assert!(config.contains("withGlobalTauri"));
     assert!(ui.contains("app.js"));
     for command in [
-        "create_instance", "list_instances", "preflight", "cancel_clone",
-        "launch_instance", "stop_instance", "discover_apps",
-        "backup_instance", "restore_instance", "delete_instance",
-        "get_logs", "clear_logs", "export_logs",
+        "create_instance",
+        "list_instances",
+        "preflight",
+        "cancel_clone",
+        "launch_instance",
+        "stop_instance",
+        "discover_apps",
+        "backup_instance",
+        "restore_instance",
+        "delete_instance",
+        "get_logs",
+        "clear_logs",
+        "export_logs",
     ] {
-        assert!(shell.contains(command), "Missing desktop command: {command}");
+        assert!(
+            shell.contains(command),
+            "Missing desktop command: {command}"
+        );
     }
 }
