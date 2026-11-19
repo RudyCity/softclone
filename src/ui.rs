@@ -314,7 +314,7 @@ impl DesktopApp {
                         ui.label(RichText::new("A fresh workspace starts here").size(18.0).color(INK).strong());
                         ui.label(RichText::new("Create a local copy of an app you own, without touching the original.").color(MUTED));
                         ui.add_space(10.0);
-                        if ui.button("Create your first clone").clicked() { self.page = Page::Create; }
+                        if icons::button(ui, Icon::SquarePlus, "Create your first clone", Some(ACCENT)).clicked() { self.page = Page::Create; }
                     });
                 });
             return;
@@ -359,15 +359,7 @@ impl DesktopApp {
                             );
                         });
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new("Launch").color(WHITE).strong(),
-                                    )
-                                    .fill(ACCENT),
-                                )
-                                .clicked()
-                            {
+                            if icons::button(ui, Icon::Play, "Launch", Some(ACCENT)).clicked() {
                                 match core::launch(&item) {
                                     Ok(_) => {
                                         self.notice =
@@ -378,7 +370,7 @@ impl DesktopApp {
                                     }
                                 }
                             }
-                            if ui.button("Open folder").clicked() {
+                            if icons::button(ui, Icon::FolderOpen, "Open folder", None).clicked() {
                                 if let Err(e) = core::open_folder(&item.root) {
                                     self.notice = Some((format!("Cannot open folder: {e}"), true));
                                 }
@@ -395,7 +387,7 @@ impl DesktopApp {
             ui,
             "Installed applications",
             "Discover your apps",
-            "Inspect local applications and choose a compatible instance strategy.",
+            "Browse registered installed apps, then choose a safe instance strategy.",
         );
         ui.horizontal(|ui| {
             ui.add(
@@ -404,7 +396,7 @@ impl DesktopApp {
                     .desired_width(390.0),
             );
             icons::inline(ui, Icon::Search, 17.0, MUTED);
-            if ui.button("Rescan").clicked() {
+            if icons::button(ui, Icon::RefreshCw, "Rescan", None).clicked() {
                 self.start_discovery();
             }
             if self.discover_worker.is_some() {
@@ -414,7 +406,7 @@ impl DesktopApp {
         });
         ui.add_space(8.0);
         ui.label(
-            RichText::new("Discovery is read-only. Unsupported apps are shown for manual review, not silently copied.")
+            RichText::new("Windows: installed-program registry (system and user), plus known browser executables. Microsoft Store/MSIX support is not yet included. Discovery is read-only.")
                 .color(MUTED).size(12.0),
         );
         ui.add_space(19.0);
@@ -455,6 +447,7 @@ impl DesktopApp {
                                 icons::inline(ui, status_icon, 16.0, ACCENT);
                                 ui.label(RichText::new(app.support.label()).size(12.0).color(ACCENT));
                             });
+                            ui.label(RichText::new(app.origin).size(11.0).color(MUTED));
                             ui.label(RichText::new(&app.note).size(11.0).color(MUTED));
                             if !app.path.as_os_str().is_empty() {
                                 ui.label(RichText::new(app.path.display().to_string())
@@ -633,7 +626,7 @@ impl DesktopApp {
         );
         ui.label(RichText::new("Software bound to the registry, keychain, machine identity, kernel drivers, services, DRM, or a single-instance lock may not work as a clone.").color(MUTED).size(13.0));
         ui.add_space(8.0);
-        if ui.button("Open data directory").clicked() {
+        if icons::button(ui, Icon::FolderOpen, "Open data directory", None).clicked() {
             if let Err(e) = core::open_folder(&registry::app_data_dir()) {
                 self.notice = Some((e.to_string(), true));
             }
