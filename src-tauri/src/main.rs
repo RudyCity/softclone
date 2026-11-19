@@ -92,7 +92,8 @@ fn is_running(children: &mut HashMap<Uuid, Child>, id: Uuid) -> DesktopResult<bo
 }
 
 fn must_be_stopped(inner: &Inner, id: Uuid) -> DesktopResult<()> {
-    if is_running(&mut guard(&inner.children)?, id)? {
+    let mut children = guard(&inner.children)?;
+    if is_running(&mut children, id)? {
         Err("Stop this managed process before changing its files.".into())
     } else {
         Ok(())
@@ -459,8 +460,7 @@ async fn backup_instance(state: State<'_, Desktop>, id: Uuid) -> DesktopResult<B
 }
 
 #[tauri::command]
-async fn list_backups(state: State<'_, Desktop>, id: Uuid) -> DesktopResult<Vec<BackupInfo>> {
-    let app = state.inner().clone();
+async fn list_backups(id: Uuid) -> DesktopResult<Vec<BackupInfo>> {
     blocking(move || {
         record(id)?;
         instance_manager::list_backups(&registry::backups_dir(), id)
@@ -521,8 +521,7 @@ async fn delete_instance(state: State<'_, Desktop>, id: Uuid) -> DesktopResult<(
 }
 
 #[tauri::command]
-async fn open_instance_folder(state: State<'_, Desktop>, id: Uuid) -> DesktopResult<()> {
-    let app = state.inner().clone();
+async fn open_instance_folder(id: Uuid) -> DesktopResult<()> {
     blocking(move || {
         let item = record(id)?;
         // The path comes from the validated registry, never from the webview.
