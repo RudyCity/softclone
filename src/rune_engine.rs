@@ -1,5 +1,6 @@
 //! Rune only receives display-name data. It has no filesystem or process bindings.
-use rune::{sync::Arc, Context, Source, Sources, Vm};
+use rune::{Context, Source, Sources, Vm};
+use std::sync::Arc;
 
 const LABEL_SCRIPT: &str = include_str!("../scripts/label.rn");
 
