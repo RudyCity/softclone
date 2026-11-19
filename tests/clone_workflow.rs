@@ -97,6 +97,27 @@ fn rejects_recursive_copy() {
     })
     .unwrap();
     assert!(core::create_clone(&prep, &source.join("nested")).is_err());
+    assert!(!source.join("nested").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn preserves_relative_internal_symlinks() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let source = make_source(sandbox.path());
+    std::os::unix::fs::symlink("notes.txt", source.join("notes-link")).unwrap();
+    let prepared = core::prepare(&CloneRequest {
+        source,
+        name: "Linked".into(),
+        entrypoint: "mytool".into(),
+        isolated_profile: false,
+    })
+    .unwrap();
+    let clone = core::create_clone(&prepared, &sandbox.path().join("library")).unwrap();
+    assert_eq!(
+        fs::read_link(clone.root.join("payload/notes-link")).unwrap(),
+        std::path::PathBuf::from("notes.txt")
+    );
 }
 
 #[cfg(unix)]

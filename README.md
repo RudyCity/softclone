@@ -37,6 +37,6 @@ For architectural details and threat-model limitations, see [docs/architecture.m
 
 ## Safety
 
-Use only software you have permission to copy. SoftClone does **not** elevate privileges, run an installer, copy application credentials or import browser profiles. Symlinks are rejected while copying to avoid accidentally copying files outside the chosen source. All launches use explicit process APIs, not shell interpolation.
+Use only software you have permission to copy. SoftClone does **not** elevate privileges, run an installer, copy application credentials or import browser profiles. Relative symlinks that resolve within the chosen source are preserved on Unix; external links and Windows symlinks are rejected. All launches use explicit process APIs, not shell interpolation.
 
 License: MIT.

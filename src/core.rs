@@ -209,9 +209,16 @@ fn checked_copy_dir(source: &Path, destination: &Path) -> Result<u64> {
             .map_err(|e| CloneError::Invalid(e.to_string()))?;
         let to = destination.join(relative);
         if item.file_type().is_symlink() {
+            let link = fs::read_link(item.path())?;
+            let resolved = fs::canonicalize(item.path())?;
+            if link.is_absolute() || !resolved.starts_with(source) {
+                return Err(CloneError::Link(item.path().display().to_string()));
+            }
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&link, &to)?;
+            #[cfg(not(unix))]
             return Err(CloneError::Link(item.path().display().to_string()));
-        }
-        if item.file_type().is_dir() {
+        } else if item.file_type().is_dir() {
             fs::create_dir_all(&to)?;
         } else if item.file_type().is_file() {
             bytes = bytes.saturating_add(fs::copy(item.path(), to)?);
@@ -227,6 +234,18 @@ fn checked_copy_dir(source: &Path, destination: &Path) -> Result<u64> {
 
 /// Clones portable application files into a fresh directory. Does not copy profiles.
 pub fn create_clone(prepared: &Prepared, library_dir: &Path) -> Result<CloneRecord> {
+    // Guard before creating directories so a nested destination never mutates the source.
+    let mut ancestor = library_dir;
+    while !ancestor.exists() {
+        ancestor = ancestor
+            .parent()
+            .ok_or_else(|| CloneError::Invalid("Library has no existing ancestor.".into()))?;
+    }
+    if fs::canonicalize(ancestor)?.starts_with(&prepared.source) {
+        return Err(CloneError::Invalid(
+            "Library must be outside the source directory.".into(),
+        ));
+    }
     fs::create_dir_all(library_dir)?;
     let library_dir = fs::canonicalize(library_dir)?;
     if library_dir.starts_with(&prepared.source) {
