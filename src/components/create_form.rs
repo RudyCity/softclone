@@ -2,7 +2,10 @@
 use super::fields;
 use crate::icons::{self, Icon};
 use eframe::egui::{self, Color32, Frame, Label, RichText, Ui};
-use softclone::{core::{CopyPlan, CopyProgress}, rune_engine, universal};
+use softclone::{
+    core::{CopyPlan, CopyProgress},
+    rune_engine, universal,
+};
 use std::path::Path;
 
 pub struct CreateForm<'a> {
@@ -195,8 +198,8 @@ impl CreateForm<'_> {
                 let fraction = if progress.total_bytes == 0 {
                     0.0
                 } else {
-                    (progress.copied_bytes as f64 / progress.total_bytes as f64)
-                        .clamp(0.0, 1.0) as f32
+                    (progress.copied_bytes as f64 / progress.total_bytes as f64).clamp(0.0, 1.0)
+                        as f32
                 };
                 ui.add(
                     egui::ProgressBar::new(fraction)

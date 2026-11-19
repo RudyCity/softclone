@@ -3,8 +3,8 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Component, Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
     process::{Child, Command},
+    sync::atomic::{AtomicBool, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
@@ -462,13 +462,23 @@ where
                 .file_name()
                 .ok_or_else(|| CloneError::Invalid("Missing app bundle name".into()))?;
             checked_copy_dir(
-                &prepared.source, &payload.join(bundle), cancel, plan,
-                &mut copied_bytes, &mut completed_files, &mut progress,
+                &prepared.source,
+                &payload.join(bundle),
+                cancel,
+                plan,
+                &mut copied_bytes,
+                &mut completed_files,
+                &mut progress,
             )?;
         } else if prepared.source.is_dir() {
             checked_copy_dir(
-                &prepared.source, &payload, cancel, plan,
-                &mut copied_bytes, &mut completed_files, &mut progress,
+                &prepared.source,
+                &payload,
+                cancel,
+                plan,
+                &mut copied_bytes,
+                &mut completed_files,
+                &mut progress,
             )?;
         } else {
             let name = prepared
@@ -476,8 +486,13 @@ where
                 .file_name()
                 .ok_or_else(|| CloneError::Invalid("Invalid filename".into()))?;
             copy_file_with_progress(
-                &prepared.source, &payload.join(name), cancel, plan,
-                &mut copied_bytes, &mut completed_files, &mut progress,
+                &prepared.source,
+                &payload.join(name),
+                cancel,
+                plan,
+                &mut copied_bytes,
+                &mut completed_files,
+                &mut progress,
             )?;
         }
         abort_if_cancelled(cancel)?;

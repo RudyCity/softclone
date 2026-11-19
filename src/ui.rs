@@ -153,13 +153,18 @@ impl DesktopApp {
     }
 
     fn tick_analysis(&mut self, ctx: &egui::Context) {
-        let result = self.analysis_worker.as_ref().map(|worker| worker.try_recv());
+        let result = self
+            .analysis_worker
+            .as_ref()
+            .map(|worker| worker.try_recv());
         match result {
             Some(Ok((key, outcome))) => {
                 if key == self.analysis_key() {
                     match outcome {
                         Ok(plan) => self.analysis = Some((key, plan)),
-                        Err(error) => self.notice = Some((format!("Preflight failed: {error}"), true)),
+                        Err(error) => {
+                            self.notice = Some((format!("Preflight failed: {error}"), true))
+                        }
                     }
                 }
                 self.analysis_worker = None;
