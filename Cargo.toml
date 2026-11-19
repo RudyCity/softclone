@@ -28,4 +28,4 @@ strip = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.55"
-win_icon_extractor = { version = "0.3.0", default-features = false }
+win_icon_extractor = { package = "win-icon-extractor", version = "0.3.0", default-features = false }
