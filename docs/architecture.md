@@ -66,3 +66,13 @@ The \`.partial\` staging directory is removed on any copy error or cancellation.
 The desktop form provides a separate nonblocking preflight worker with stale-result suppression (input fingerprint), and a copy worker that streams progress to the UI. Cancellation requests remain visible while cleanup is pending; successful copies are saved and shown in the library. Profile-only instances continue to use the existing lightweight creation path, as their binaries are not copied.
 
 Copy estimates do not currently check the target filesystem's free space. Before large clones, users should ensure sufficient free storage. True filesystem snapshots, atomic source isolation, full extended-attribute preservation and privileged OS sandboxing remain out of scope.
+
+## v0.5.0: managed instance lifecycle
+
+`instance_manager` exposes `rename`, `duplicate`, `backup`, `list_backups`, `restore`, and `delete`, with library and registry paths passed explicitly. The implementation refuses a root outside the canonical library or with a mismatching UUID suffix, refuses symlink roots, and verifies the matching registry record. Backup metadata includes snapshot ID and source instance ID. Restore checks both IDs and stages directory swaps with rollback when possible. Delete renames the instance directory before committing the registry update, and rolls that rename back if registry persistence fails.
+
+The UI maintains a map of child process handles launched by SoftClone in the current session. It polls exit status, displays the PID, and only provides Stop/Restart for tracked child processes. It never sends signals to arbitrary PIDs or assumes externally launched processes are stopped. The process map is intentionally ephemeral. A macOS `open` launcher may exit before the app, so the tracked child is not necessarily the actual GUI app.
+
+Backups are plain local folders and can include cookies, credentials, private browser profiles and application data. They are not encrypted or compressed. Long-running operations run on a worker thread; the UI shows busy state and explicit destructive confirmations. Tracked running processes block duplicate/backup/restore/delete, but external processes cannot reliably be detected. Instance backups are retained after deleting an instance.
+
+Known gaps: encrypted backup export, OS process-tree tracking, source filesystem snapshots, accurate external process tracking, and native installers are not included. When cleanup fails after a registry update, SoftClone reports the staged recovery path.

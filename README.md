@@ -94,3 +94,18 @@ Portable copies now use a **cancellable streaming copy** with progress by bytes 
 The existing \`create_clone\` Rust API and saved registry format remain backward-compatible. The new \`create_clone_with_progress\` API enables progress and cancellation and uses the same validation pipeline. The interface displays progress and a cancel action, but background filesystem operations still respect OS permissions and cannot bypass a vendor's licensing or app isolation policies.
 
 **Caveats:** Preflight sizes are estimates that may become stale if source files change. This is not a snapshot or filesystem transaction across the source and destination. Per-file timestamps, extended attributes and macOS signatures may not survive a custom portable copy; treat signed bundles and vendor-installed applications as manual-review cases. Cancellation is cooperative, not instant during every operating-system syscall.
+
+## Instance Manager (v0.5.0)
+
+The My clones workspace supports these explicit managed-instance actions:
+
+- **Launch, Stop and Restart:** processes started during the current SoftClone session are tracked by their child handle and PID. The app never kills an arbitrary PID. On macOS, the `open` launcher may exit before the GUI app and process tracking is best effort.
+- **Rename:** changes the display label in the registry without moving installed files.
+- **Duplicate:** copies only an existing SoftClone instance folder to a unique new managed folder, with its own registry record. The source app installation is not modified.
+- **Backup:** takes a local, directory-based snapshot under the SoftClone data folder (`backups/`). These are not encrypted or compressed archives and may contain sensitive personal app data or tokens.
+- **Restore:** selects a snapshot belonging to the same instance, stages a copy, swaps the managed directory and attempts rollback on failure. The original installed application is never overwritten.
+- **Delete:** requires typing the exact instance name, validates the library path and registry, stages removal with registry rollback on failure, and deletes managed instance files. Existing backups remain available.
+
+**Safety boundaries:** Stop/Restart works only for directly tracked processes in the current session. If an app starts child processes or outlives a launcher, those may not be tracked. Close any externally launched app before duplicating, backing up, restoring or deleting. No feature bypasses licensing, DRM, services or OS sandboxing.
+
+The Rust lifecycle API is in `src/instance_manager.rs`, with tests for backup/restore, duplication, rename, deletion and path protections.

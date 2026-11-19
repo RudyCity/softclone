@@ -27,3 +27,7 @@ Search applies across name, publisher, version and path. Filter tabs distinguish
 ## Smart Clone preflight and progress (v0.4.0)
 
 The Create clone form adds a fourth group, **Preflight Check**, with an explicit Analyze source action and a result line showing estimated bytes and file count. For profile-only mode, it explicitly states that no binary copying occurs. The worker never blocks egui during source traversal. While cloning, the submit action is replaced with a progress bar, completed/total byte and file counts, the current filename, and an explicit Cancel action. A cancellation request disables repeated cancel clicks and surfaces the final cleanup result in the standard notice component.
+
+## v0.5.0 Instance Manager actions
+
+Each clone card is a reusable component showing a tracked PID when running, otherwise 'No managed process tracked'. The action row provides Launch/Stop/Restart, Folder, Rename, Duplicate, Backup, Restore, and Delete. Rename and Duplicate validate user-facing names, Restore requires selecting a backup, and Delete requires typing the exact instance name. Heavy folder operations use a worker and display busy status without blocking the UI.
