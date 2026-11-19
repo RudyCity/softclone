@@ -1,3 +1,4 @@
+mod components;
 mod icons;
 mod ui;
 

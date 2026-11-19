@@ -1,14 +1,15 @@
+use crate::components::{create_form::CreateForm, discovery_form};
 use crate::icons::{self, Icon};
 use eframe::egui::{
-    self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, TextEdit, Vec2,
+    self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2,
 };
 use softclone::{
     core::{self, CloneRecord, CloneRequest, RunMode},
-    registry, rune_engine,
+    registry,
     universal::{self, DiscoveredApp, Support},
 };
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
@@ -40,6 +41,7 @@ pub struct DesktopApp {
     discovered: Vec<DiscoveredApp>,
     discover_query: String,
     discover_worker: Option<Receiver<Vec<DiscoveredApp>>>,
+    discovery_complete: bool,
     worker: Option<Receiver<Result<CloneRecord, String>>>,
     notice: Option<(String, bool)>,
 }
@@ -73,6 +75,7 @@ impl DesktopApp {
             discovered: Vec::new(),
             discover_query: String::new(),
             discover_worker: None,
+            discovery_complete: false,
             worker: None,
             notice,
         }
@@ -126,6 +129,7 @@ impl DesktopApp {
         }
         let (tx, rx) = mpsc::channel();
         self.discover_worker = Some(rx);
+        self.discovery_complete = false;
         std::thread::spawn(move || {
             let _ = tx.send(universal::discover_apps());
         });
@@ -137,6 +141,7 @@ impl DesktopApp {
                 Ok(apps) => {
                     self.discovered = apps;
                     self.discover_worker = None;
+                    self.discovery_complete = true;
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.notice = Some(("App discovery stopped unexpectedly.".into(), true));
@@ -192,7 +197,7 @@ impl DesktopApp {
                     self.page == Page::Discover,
                 ) {
                     self.page = Page::Discover;
-                    if self.discovered.is_empty() {
+                    if !self.discovery_complete && self.discover_worker.is_none() {
                         self.start_discovery();
                     }
                 }
@@ -398,83 +403,70 @@ impl DesktopApp {
             "Discover your apps",
             "Browse registered installed apps, then choose a safe instance strategy.",
         );
-        ui.horizontal(|ui| {
-            ui.add(
-                TextEdit::singleline(&mut self.discover_query)
-                    .hint_text("Search installed applications")
-                    .desired_width(390.0),
-            );
-            icons::inline(ui, Icon::Search, 17.0, MUTED);
-            if icons::button(ui, Icon::RefreshCw, "Rescan", None).clicked() {
-                self.start_discovery();
-            }
-            if self.discover_worker.is_some() {
-                ui.spinner();
-                ui.label(RichText::new("Scanning local apps…").color(MUTED));
-            }
-        });
-        ui.add_space(8.0);
-        ui.label(
-            RichText::new("Windows: installed-program registry (system and user), plus known browser executables. Microsoft Store/MSIX support is not yet included. Discovery is read-only.")
-                .color(MUTED).size(12.0),
-        );
-        ui.add_space(19.0);
-        let query = self.discover_query.trim().to_lowercase();
+
+        let filter = self.discover_query.trim().to_lowercase();
+        let visible = self
+            .discovered
+            .iter()
+            .filter(|app| {
+                filter.is_empty()
+                    || app.name.to_lowercase().contains(&filter)
+                    || app.path.to_string_lossy().to_lowercase().contains(&filter)
+            })
+            .count();
+        let toolbar = discovery_form::DiscoveryToolbar {
+            query: &mut self.discover_query,
+            scanning: self.discover_worker.is_some(),
+            complete: self.discovery_complete,
+            total: self.discovered.len(),
+            visible,
+        }
+        .show(ui);
+        if toolbar.rescan {
+            self.start_discovery();
+        }
+        ui.add_space(10.0);
+        discovery_form::compatibility_note(ui);
+        ui.add_space(18.0);
+
+        let filter = self.discover_query.trim().to_lowercase();
         let matches: Vec<_> = self
             .discovered
             .iter()
-            .filter(|item| {
-                query.is_empty()
-                    || item.name.to_lowercase().contains(&query)
-                    || item.path.to_string_lossy().to_lowercase().contains(&query)
+            .filter(|app| {
+                filter.is_empty()
+                    || app.name.to_lowercase().contains(&filter)
+                    || app.path.to_string_lossy().to_lowercase().contains(&filter)
             })
             .cloned()
             .collect();
-        if matches.is_empty() {
-            Frame::new().fill(WHITE).stroke(Stroke::new(1.0_f32, LINE))
-                .corner_radius(12).inner_margin(24).show(ui, |ui| {
-                    ui.label(RichText::new("No matching apps found.").color(INK).strong());
-                    ui.label(RichText::new("You can still enter an executable or application folder manually under Create clone.").color(MUTED));
-                });
-        }
-        for app in matches {
+        if matches.is_empty() && self.discover_worker.is_none() {
             Frame::new()
                 .fill(WHITE)
                 .stroke(Stroke::new(1.0_f32, LINE))
                 .corner_radius(12)
-                .inner_margin(17)
+                .inner_margin(24)
                 .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new(&app.name).size(15.0).strong().color(INK));
-                            ui.horizontal(|ui| {
-                                let status_icon = match app.support {
-                                    Support::ProfileAdapter => Icon::UserRoundCheck,
-                                    Support::CopyCandidate => Icon::Package,
-                                    Support::ReviewRequired => Icon::AlertTriangle,
-                                };
-                                icons::inline(ui, status_icon, 16.0, ACCENT);
-                                ui.label(RichText::new(app.support.label()).size(12.0).color(ACCENT));
-                            });
-                            ui.label(RichText::new(app.origin).size(11.0).color(MUTED));
-                            ui.label(RichText::new(&app.note).size(11.0).color(MUTED));
-                            if !app.path.as_os_str().is_empty() {
-                                ui.label(RichText::new(app.path.display().to_string())
-                                    .size(11.0).color(MUTED));
-                            }
-                        });
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui.add_enabled(app.launchable, egui::Button::new("Use this app")).on_disabled_hover_text("Executable could not be resolved from installed application metadata").clicked() {
-                                self.source = app.path.display().to_string();
-                                self.name = format!("{} copy", app.name);
-                                self.entrypoint.clear();
-                                self.profile_only = app.support != Support::CopyCandidate;
-                                self.isolated = true;
-                                self.page = Page::Create;
-                            }
-                        });
-                    });
+                    ui.label(
+                        RichText::new("No matching applications")
+                            .color(INK)
+                            .strong(),
+                    );
+                    crate::components::fields::helper(
+                        ui,
+                        "Try another search, rescan your applications, or enter a source path under Create clone.",
+                    );
                 });
+        }
+        for app in matches {
+            if discovery_form::app_card(ui, &app) {
+                self.source = app.path.display().to_string();
+                self.name = format!("{} copy", app.name);
+                self.entrypoint.clear();
+                self.profile_only = app.support != Support::CopyCandidate;
+                self.isolated = true;
+                self.page = Page::Create;
+            }
             ui.add_space(8.0);
         }
     }
@@ -486,73 +478,30 @@ impl DesktopApp {
             "Create an app clone",
             "Choose local application files. The original stays exactly where it is.",
         );
-        Frame::new().fill(WHITE).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(12)
-            .inner_margin(26).show(ui, |ui| {
-                ui.set_max_width(760.0);
-                ui.label(RichText::new("01  SOURCE").color(ACCENT).size(11.0).strong());
-                ui.label(RichText::new("Application path").color(INK).size(15.0).strong());
-                ui.label(RichText::new("Folder, standalone executable, AppImage, or macOS .app bundle").color(MUTED).size(12.0));
-                ui.add(TextEdit::singleline(&mut self.source)
-                    .hint_text("Paste an absolute path, e.g. /Applications/Example.app")
-                    .desired_width(f32::INFINITY));
-                ui.add_space(20.0);
-                ui.separator();
-                ui.add_space(10.0);
-                ui.label(RichText::new("02  DETAILS").color(ACCENT).size(11.0).strong());
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Clone name").color(INK).size(15.0).strong());
-                    if ui.small_button("Suggest with Rune").clicked() {
-                        let path = Path::new(self.source.trim());
-                        let base = path.file_stem().or_else(|| path.file_name())
-                            .map(|x| x.to_string_lossy().into_owned())
-                            .filter(|x| !x.is_empty()).unwrap_or_else(|| "My app".into());
-                        let number = self.items.iter().filter(|x| x.source == path).count() as i64 + 1;
-                        match rune_engine::clone_label(&base, number) {
-                            Ok(name) => self.name = name,
-                            Err(e) => self.notice = Some((format!("Rune naming rule failed: {e}"), true)),
-                        }
-                    }
-                });
-                ui.add(TextEdit::singleline(&mut self.name).hint_text("e.g. Work browser").desired_width(f32::INFINITY));
-                ui.add_space(9.0);
-                ui.label(RichText::new("Entrypoint inside folder (optional)").color(INK).size(15.0).strong());
-                ui.add(TextEdit::singleline(&mut self.entrypoint)
-                    .hint_text("Auto-detect, or e.g. bin/app").desired_width(f32::INFINITY));
-                ui.label(RichText::new("Only needed for folders with multiple executables or nested binaries.").size(11.0).color(MUTED));
-                ui.add_space(20.0);
-                ui.separator();
-                ui.add_space(10.0);
-                ui.label(RichText::new("03  INSTANCE STRATEGY").color(ACCENT).size(11.0).strong());
-                ui.radio_value(&mut self.profile_only, false, "Copy application files (portable applications)");
-                ui.radio_value(&mut self.profile_only, true, "Use installed application with a separate profile (no binary copy)");
-                if self.profile_only {
-                    self.isolated = true;
-                    let path = Path::new(self.source.trim());
-                    let detail = if universal::adapter_for(path).is_some() {
-                        "Known browser adapter: dedicated command-line profile arguments will be used."
-                    } else {
-                        "Experimental for this app: it might ignore profile paths and still share state with the original."
-                    };
-                    ui.label(RichText::new(detail).size(12.0).color(MUTED));
-                } else {
-                    ui.checkbox(&mut self.isolated, "Create separate per-clone data directories");
-                    ui.label(RichText::new("Best effort via environment variables. Some apps ignore these paths. Not a sandbox.").size(12.0).color(MUTED));
-                }
-                ui.add_space(15.0);
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Instance metadata and profiles stay in the local SoftClone library.").size(12.0).color(MUTED));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if self.worker.is_some() {
-                            ui.spinner();
-                            ui.label(RichText::new("Preparing instance…").color(ACCENT));
-                        } else if ui.add(egui::Button::new(RichText::new("Create clone").color(WHITE).strong()).fill(ACCENT)).clicked() {
-                            self.submit();
-                        }
-                    });
-                });
-            });
+        let path = PathBuf::from(self.source.trim());
+        let next_label_number =
+            self.items.iter().filter(|item| item.source == path).count() as i64 + 1;
+        let action = CreateForm {
+            source: &mut self.source,
+            name: &mut self.name,
+            entrypoint: &mut self.entrypoint,
+            isolated: &mut self.isolated,
+            profile_only: &mut self.profile_only,
+            next_label_number,
+            creating: self.worker.is_some(),
+        }
+        .show(ui);
+        if let Some(message) = action.error {
+            self.notice = Some((message, true));
+        }
+        if action.submit {
+            self.submit();
+        }
         ui.add_space(16.0);
-        ui.label(RichText::new("Only clone applications you have rights to copy. License checks and OS restrictions still apply.").size(12.0).color(MUTED));
+        crate::components::fields::helper(
+            ui,
+            "Only clone software you have rights to copy. Licenses and operating-system restrictions still apply.",
+        );
     }
 
     fn submit(&mut self) {
