@@ -45,7 +45,7 @@ pub fn button(ui: &mut Ui, icon: Icon, label: &str, accent: Option<Color32>) -> 
         painter.rect_stroke(
             rect,
             egui::CornerRadius::same(8),
-            Stroke::new(1.0, Color32::from_rgb(219, 228, 225)),
+            Stroke::new(1.0_f32, Color32::from_rgb(219, 228, 225)),
             StrokeKind::Inside,
         );
     }
