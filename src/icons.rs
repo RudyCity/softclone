@@ -26,6 +26,33 @@ pub fn inline(ui: &mut Ui, icon: Icon, size: f32, color: Color32) -> Response {
     response
 }
 
+pub fn button(ui: &mut Ui, icon: Icon, label: &str, accent: Option<Color32>) -> Response {
+    let width = 43.0 + label.chars().count() as f32 * 7.3;
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(width, 35.0), Sense::click());
+    let color = if accent.is_some() { Color32::WHITE } else { Color32::from_rgb(56, 67, 72) };
+    let background = accent.unwrap_or(if response.hovered() {
+        Color32::from_rgb(231, 238, 235)
+    } else {
+        Color32::from_rgb(246, 248, 247)
+    });
+    let painter = ui.painter();
+    painter.rect_filled(rect, egui::CornerRadius::same(8), background);
+    if accent.is_none() {
+        painter.rect_stroke(
+            rect, egui::CornerRadius::same(8),
+            Stroke::new(1.0, Color32::from_rgb(219, 228, 225)), StrokeKind::Inside,
+        );
+    }
+    draw(painter, icon, egui::pos2(rect.left() + 18.0, rect.center().y), 16.0, color);
+    painter.text(
+        egui::pos2(rect.left() + 33.0, rect.center().y),
+        egui::Align2::LEFT_CENTER, label,
+        egui::FontId::proportional(12.5), color,
+    );
+    response
+}
+
 pub fn draw(painter: &egui::Painter, icon: Icon, center: Pos2, size: f32, color: Color32) {
     let scale = size / 24.0;
     let at = |x: f32, y: f32| -> Pos2 {
