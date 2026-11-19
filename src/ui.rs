@@ -673,8 +673,22 @@ impl DesktopApp {
             Ok(child) => {
                 let pid = child.id();
                 self.processes.insert(record.id, child);
+                let target = if record.run_mode == core::RunMode::ProfileOnly {
+                    &record.source
+                } else {
+                    &record.entrypoint
+                };
+                let detail = if universal::adapter_for(target) == Some(universal::Adapter::ZoomWindows) {
+                    " Zoom multi-instance mode requested with a unique data selector; verify that a second window appeared."
+                } else if record.run_mode == core::RunMode::ProfileOnly
+                    && universal::adapter_for(target).is_none()
+                {
+                    " This app has no verified independent-profile adapter and may reuse an existing window."
+                } else {
+                    ""
+                };
                 self.notice = Some((
-                    format!("Launched {} (tracked PID {pid}).", record.name),
+                    format!("Launch requested for {} (tracked PID {pid}).{detail}", record.name),
                     false,
                 ));
             }

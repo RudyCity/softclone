@@ -203,7 +203,7 @@ fn installed_programs(results: &mut HashMap<String, DiscoveredApp>) {
                 let note = if !launchable {
                     "Registered installed app; no usable executable found. Use a manual source path."
                 } else if support == Support::ProfileAdapter {
-                    "Registered installed browser with known dedicated profile arguments."
+                    "Registered app with documented per-instance arguments (browser profiles or Zoom Windows multi-instance)."
                 } else {
                     "Registered installed app. Profile isolation is best effort, not a sandbox."
                 };

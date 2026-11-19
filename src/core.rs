@@ -620,7 +620,7 @@ pub fn launch(record: &CloneRecord) -> Result<Child> {
         ] {
             fs::create_dir_all(profile.join(sub))?;
         }
-        crate::universal::adapter_args(&target, &profile)
+        crate::universal::adapter_args_for_instance(&target, &profile, record.id)
     } else {
         Vec::new()
     };
@@ -640,11 +640,15 @@ pub fn launch(record: &CloneRecord) -> Result<Child> {
     command.current_dir(&working_dir);
     if record.isolated_profile {
         command.env("SOFTCLONE_PROFILE_DIR", &profile);
-        command.env("XDG_CONFIG_HOME", profile.join("config"));
-        command.env("XDG_DATA_HOME", profile.join("data"));
-        command.env("XDG_CACHE_HOME", profile.join("cache"));
-        command.env("APPDATA", profile.join("roaming"));
-        command.env("LOCALAPPDATA", profile.join("local"));
+        // Zoom uses its documented --data selector. Keep Windows' original
+        // APPDATA/LOCALAPPDATA for installed Zoom and its helper processes.
+        if crate::universal::adapter_for(&target) != Some(crate::universal::Adapter::ZoomWindows) {
+            command.env("XDG_CONFIG_HOME", profile.join("config"));
+            command.env("XDG_DATA_HOME", profile.join("data"));
+            command.env("XDG_CACHE_HOME", profile.join("cache"));
+            command.env("APPDATA", profile.join("roaming"));
+            command.env("LOCALAPPDATA", profile.join("local"));
+        }
     }
     Ok(command.spawn()?)
 }

@@ -125,7 +125,10 @@ impl CreateForm<'_> {
         ui.add_space(3.0);
         if *self.profile_only {
             *self.isolated = true;
-            let message = if universal::adapter_for(Path::new(self.source.trim())).is_some() {
+            let adapter = universal::adapter_for(Path::new(self.source.trim()));
+            let message = if adapter == Some(universal::Adapter::ZoomWindows) {
+                "Zoom Windows: each instance uses the officially documented --multipt=TRUE and a distinct --data=data... selector. Existing profiles work after updating SoftClone."
+            } else if adapter.is_some() {
                 "Known browser adapter: dedicated command-line profile arguments are used."
             } else {
                 "Experimental: this application may ignore profile paths and share settings with the original."

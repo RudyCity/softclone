@@ -82,12 +82,18 @@ pub fn matches_app(app: &DiscoveredApp, query: &str, filter: AppFilter) -> bool 
 pub enum Adapter {
     Chromium,
     Firefox,
+    /// Zoom Workplace on Windows, with official multi-instance flags.
+    ZoomWindows,
 }
 
 /// Only recognize apps with known, documented per-instance command-line flags.
 /// These are hints, not an OS sandbox or a license bypass.
 pub fn adapter_for(path: &Path) -> Option<Adapter> {
     let name = path.file_stem()?.to_string_lossy().to_lowercase();
+    #[cfg(target_os = "windows")]
+    if name == "zoom" && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
+        return Some(Adapter::ZoomWindows);
+    }
     let chromium = [
         "chrome",
         "google chrome",
@@ -124,7 +130,23 @@ pub fn adapter_args(target: &Path, profile_dir: &Path) -> Vec<OsString> {
             OsString::from("-profile"),
             profile_dir.join("firefox").into_os_string(),
         ],
-        None => Vec::new(),
+        Some(Adapter::ZoomWindows) | None => Vec::new(),
+    }
+}
+
+/// Stable per-instance startup arguments. Zoom's official Windows developer
+/// guide documents --multipt=TRUE and --data starting with "data".
+pub fn adapter_args_for_instance(
+    target: &Path,
+    profile_dir: &Path,
+    instance_id: uuid::Uuid,
+) -> Vec<OsString> {
+    match adapter_for(target) {
+        Some(Adapter::ZoomWindows) => vec![
+            OsString::from("--multipt=TRUE"),
+            OsString::from(format!("--data=data{}", instance_id.simple())),
+        ],
+        _ => adapter_args(target, profile_dir),
     }
 }
 
@@ -473,6 +495,29 @@ mod tests {
         let args = adapter_args(Path::new("firefox"), Path::new("/tmp/a"));
         assert_eq!(args[0], "-no-remote");
     }
+    #[test]
+    fn zoom_multi_instance_args_are_stable_and_distinct_on_windows() {
+        assert_eq!(adapter_for(Path::new("ZoomIt.exe")), None);
+        assert_eq!(adapter_for(Path::new("ZoomUpdater.exe")), None);
+        #[cfg(target_os = "windows")]
+        {
+            assert_eq!(adapter_for(Path::new(r"C:\Program Files\Zoom\bin\Zoom.exe")), Some(Adapter::ZoomWindows));
+            assert_eq!(adapter_for(Path::new(r"C:\Zoom\zoom.EXE")), Some(Adapter::ZoomWindows));
+            let first = uuid::Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap();
+            let second = uuid::Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap();
+            let profile = Path::new(r"C:\softclone\profile-1\profile");
+            let a = adapter_args_for_instance(Path::new("Zoom.exe"), profile, first);
+            let b = adapter_args_for_instance(Path::new("Zoom.exe"), profile, second);
+            assert_eq!(a[0], "--multipt=TRUE");
+            assert_eq!(b[0], "--multipt=TRUE");
+            assert!(a[1].to_string_lossy().starts_with("--data=data"));
+            assert_ne!(a[1], b[1]);
+            assert_eq!(a, adapter_args_for_instance(Path::new("Zoom.exe"), profile, first));
+        }
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(adapter_for(Path::new("/Applications/Zoom.app")), None);
+    }
+
     #[test]
     fn extracts_desktop_entry_without_shell() {
         let desktop = "[Desktop Entry]\nType=Application\nName=My Browser\nExec=/usr/bin/google-chrome --new-window %U\n";
