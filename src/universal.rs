@@ -2,10 +2,11 @@
 //! Discovery is read-only. A discovered app is never launched automatically.
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::env;
+#[cfg(not(target_os = "windows"))]
+use std::fs;
 use std::{
     collections::HashSet,
     ffi::OsString,
-    fs,
     path::{Path, PathBuf},
 };
 
@@ -248,10 +249,11 @@ fn windows_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
             } else {
                 parent_name
             };
+            let strong_match = app_name.eq_ignore_ascii_case(&name);
             let app = candidate(app_name, path.to_path_buf(), true);
             if app.support == Support::ProfileAdapter {
                 known.push(app);
-            } else if app_name.eq_ignore_ascii_case(&name) {
+            } else if strong_match {
                 likely.push(app);
             } else {
                 others.push(app);
