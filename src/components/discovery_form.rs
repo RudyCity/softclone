@@ -98,7 +98,6 @@ pub fn compatibility_note(ui: &mut Ui) {
     fields::helper(ui, message);
 }
 
-
 fn app_details(ui: &mut Ui, app: &DiscoveredApp) {
     ui.add(
         Label::new(

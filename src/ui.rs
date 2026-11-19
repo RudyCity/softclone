@@ -1,8 +1,6 @@
 use crate::components::{create_form::CreateForm, discovery_form};
 use crate::icons::{self, Icon};
-use eframe::egui::{
-    self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2,
-};
+use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2};
 use softclone::{
     core::{self, CloneRecord, CloneRequest, RunMode},
     registry,

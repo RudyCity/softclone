@@ -1,8 +1,6 @@
 //! Shared, responsive form primitives used by discovery and clone creation.
 use crate::icons::{self, Icon};
-use eframe::egui::{
-    self, Color32, Frame, Label, Response, RichText, Stroke, TextEdit, Ui, Vec2,
-};
+use eframe::egui::{self, Color32, Frame, Label, Response, RichText, Stroke, TextEdit, Ui, Vec2};
 
 pub const INK: Color32 = Color32::from_rgb(24, 34, 43);
 pub const MUTED: Color32 = Color32::from_rgb(112, 123, 132);

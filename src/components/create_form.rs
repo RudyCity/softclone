@@ -56,7 +56,12 @@ impl CreateForm<'_> {
 
     fn details_section(&mut self, ui: &mut Ui) -> Option<String> {
         fields::section(ui, "02", "INSTANCE DETAILS");
-        ui.label(RichText::new("Clone name").size(14.0).color(fields::INK).strong());
+        ui.label(
+            RichText::new("Clone name")
+                .size(14.0)
+                .color(fields::INK)
+                .strong(),
+        );
         let mut error = None;
         if ui.button("Suggest with Rune").clicked() {
             let path = Path::new(self.source.trim());
@@ -116,9 +121,11 @@ impl CreateForm<'_> {
     fn actions(&self, ui: &mut Ui) -> bool {
         ui.add(
             Label::new(
-                RichText::new("Instance metadata and profiles stay in your local SoftClone library.")
-                    .size(12.0)
-                    .color(fields::MUTED),
+                RichText::new(
+                    "Instance metadata and profiles stay in your local SoftClone library.",
+                )
+                .size(12.0)
+                .color(fields::MUTED),
             )
             .wrap(),
         );
@@ -141,7 +148,10 @@ impl CreateForm<'_> {
                 })
                 .inner;
             if !ready {
-                fields::helper(ui, "Enter an application path and a clone name to continue.");
+                fields::helper(
+                    ui,
+                    "Enter an application path and a clone name to continue.",
+                );
             }
             response.clicked()
         }
