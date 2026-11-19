@@ -2,8 +2,9 @@ use eframe::egui::{
     self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, TextEdit, Vec2,
 };
 use softclone::{
-    core::{self, CloneRecord, CloneRequest},
+    core::{self, CloneRecord, CloneRequest, RunMode},
     registry, rune_engine,
+    universal::{self, DiscoveredApp, Support},
 };
 use std::{
     path::{Path, PathBuf},
@@ -23,6 +24,7 @@ const WHITE: Color32 = Color32::WHITE;
 enum Page {
     Library,
     Create,
+    Discover,
     About,
 }
 
@@ -33,6 +35,10 @@ pub struct DesktopApp {
     name: String,
     entrypoint: String,
     isolated: bool,
+    profile_only: bool,
+    discovered: Vec<DiscoveredApp>,
+    discover_query: String,
+    discover_worker: Option<Receiver<Vec<DiscoveredApp>>>,
     worker: Option<Receiver<Result<CloneRecord, String>>>,
     notice: Option<(String, bool)>,
 }
@@ -62,6 +68,10 @@ impl DesktopApp {
             name: String::new(),
             entrypoint: String::new(),
             isolated: true,
+            profile_only: false,
+            discovered: Vec::new(),
+            discover_query: String::new(),
+            discover_worker: None,
             worker: None,
             notice,
         }
@@ -78,6 +88,7 @@ impl DesktopApp {
                     self.source.clear();
                     self.name.clear();
                     self.entrypoint.clear();
+                    self.profile_only = false;
                 }
                 Ok(Err(e)) => {
                     self.notice = Some((e, true));
@@ -106,6 +117,33 @@ impl DesktopApp {
         ui.add_space(3.0);
         ui.label(RichText::new(description).color(MUTED).size(14.0));
         ui.add_space(22.0);
+    }
+
+    fn start_discovery(&mut self) {
+        if self.discover_worker.is_some() { return; }
+        let (tx, rx) = mpsc::channel();
+        self.discover_worker = Some(rx);
+        std::thread::spawn(move || {
+            let _ = tx.send(universal::discover_apps());
+        });
+    }
+
+    fn tick_discovery(&mut self, ctx: &egui::Context) {
+        if let Some(worker) = &self.discover_worker {
+            match worker.try_recv() {
+                Ok(apps) => {
+                    self.discovered = apps;
+                    self.discover_worker = None;
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.notice = Some(("App discovery stopped unexpectedly.".into(), true));
+                    self.discover_worker = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    ctx.request_repaint_after(Duration::from_millis(160));
+                }
+            }
+        }
     }
 
     fn sidebar(&mut self, ctx: &egui::Context) {
@@ -142,6 +180,10 @@ impl DesktopApp {
                 }
                 if Self::nav_button(ui, "+   Create clone", self.page == Page::Create) {
                     self.page = Page::Create;
+                }
+                if Self::nav_button(ui, "⌕   Discover apps", self.page == Page::Discover) {
+                    self.page = Page::Discover;
+                    if self.discovered.is_empty() { self.start_discovery(); }
                 }
                 ui.add_space(24.0);
                 ui.label(
@@ -284,10 +326,12 @@ impl DesktopApp {
                                 RichText::new(format!(
                                     "{}  ·  {}",
                                     format_size(item.copied_bytes),
-                                    if item.isolated_profile {
-                                        "Separate profile"
+                                    if item.run_mode == RunMode::ProfileOnly {
+                                        "Installed app · profile-only"
+                                    } else if item.isolated_profile {
+                                        "Portable copy · separate profile"
                                     } else {
-                                        "Shared environment"
+                                        "Portable copy"
                                     }
                                 ))
                                 .size(12.0)
@@ -328,6 +372,75 @@ impl DesktopApp {
                     });
                 });
             ui.add_space(7.0);
+        }
+    }
+
+    fn discover(&mut self, ui: &mut egui::Ui) {
+        Self::headline(
+            ui,
+            "Installed applications",
+            "Discover your apps",
+            "Inspect local applications and choose a compatible instance strategy.",
+        );
+        ui.horizontal(|ui| {
+            ui.add(
+                TextEdit::singleline(&mut self.discover_query)
+                    .hint_text("Search installed applications")
+                    .desired_width(390.0),
+            );
+            if ui.button("Rescan").clicked() {
+                self.start_discovery();
+            }
+            if self.discover_worker.is_some() {
+                ui.spinner();
+                ui.label(RichText::new("Scanning local apps…").color(MUTED));
+            }
+        });
+        ui.add_space(8.0);
+        ui.label(
+            RichText::new("Discovery is read-only. Unsupported apps are shown for manual review, not silently copied.")
+                .color(MUTED).size(12.0),
+        );
+        ui.add_space(19.0);
+        let query = self.discover_query.trim().to_lowercase();
+        let matches: Vec<_> = self.discovered.iter()
+            .filter(|item| {
+                query.is_empty()
+                    || item.name.to_lowercase().contains(&query)
+                    || item.path.to_string_lossy().to_lowercase().contains(&query)
+            })
+            .cloned()
+            .collect();
+        if matches.is_empty() {
+            Frame::new().fill(WHITE).stroke(Stroke::new(1.0_f32, LINE))
+                .corner_radius(12).inner_margin(24).show(ui, |ui| {
+                    ui.label(RichText::new("No matching apps found.").color(INK).strong());
+                    ui.label(RichText::new("You can still enter an executable or application folder manually under Create clone.").color(MUTED));
+                });
+        }
+        for app in matches {
+            Frame::new().fill(WHITE).stroke(Stroke::new(1.0_f32, LINE))
+                .corner_radius(12).inner_margin(17).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(&app.name).size(15.0).strong().color(INK));
+                            ui.label(RichText::new(app.support.label()).size(12.0).color(ACCENT));
+                            ui.label(RichText::new(&app.note).size(11.0).color(MUTED));
+                            ui.label(RichText::new(app.path.display().to_string()).size(11.0).color(MUTED));
+                        });
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.button("Use this app").clicked() {
+                                self.source = app.path.display().to_string();
+                                self.name = format!("{} copy", app.name);
+                                self.entrypoint.clear();
+                                self.profile_only = app.support != Support::CopyCandidate;
+                                self.isolated = true;
+                                self.page = Page::Create;
+                            }
+                        });
+                    });
+                });
+            ui.add_space(8.0);
         }
     }
 
@@ -374,16 +487,29 @@ impl DesktopApp {
                 ui.add_space(20.0);
                 ui.separator();
                 ui.add_space(10.0);
-                ui.label(RichText::new("03  PROFILE").color(ACCENT).size(11.0).strong());
-                ui.checkbox(&mut self.isolated, "Create separate per-clone data directories");
-                ui.label(RichText::new("Best effort via environment variables. Some applications ignore these paths. Not a sandbox.").size(12.0).color(MUTED));
+                ui.label(RichText::new("03  INSTANCE STRATEGY").color(ACCENT).size(11.0).strong());
+                ui.radio_value(&mut self.profile_only, false, "Copy application files (portable applications)");
+                ui.radio_value(&mut self.profile_only, true, "Use installed application with a separate profile (no binary copy)");
+                if self.profile_only {
+                    self.isolated = true;
+                    let path = Path::new(self.source.trim());
+                    let detail = if universal::adapter_for(path).is_some() {
+                        "Known browser adapter: dedicated command-line profile arguments will be used."
+                    } else {
+                        "Experimental for this app: it might ignore profile paths and still share state with the original."
+                    };
+                    ui.label(RichText::new(detail).size(12.0).color(MUTED));
+                } else {
+                    ui.checkbox(&mut self.isolated, "Create separate per-clone data directories");
+                    ui.label(RichText::new("Best effort via environment variables. Some apps ignore these paths. Not a sandbox.").size(12.0).color(MUTED));
+                }
                 ui.add_space(15.0);
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Copies are stored in your local SoftClone library.").size(12.0).color(MUTED));
+                    ui.label(RichText::new("Instance metadata and profiles stay in the local SoftClone library.").size(12.0).color(MUTED));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if self.worker.is_some() {
                             ui.spinner();
-                            ui.label(RichText::new("Copying files…").color(ACCENT));
+                            ui.label(RichText::new("Preparing instance…").color(ACCENT));
                         } else if ui.add(egui::Button::new(RichText::new("Create clone").color(WHITE).strong()).fill(ACCENT)).clicked() {
                             self.submit();
                         }
@@ -402,7 +528,7 @@ impl DesktopApp {
             source: PathBuf::from(self.source.trim()),
             name: self.name.clone(),
             entrypoint: self.entrypoint.clone(),
-            isolated_profile: self.isolated,
+            isolated_profile: self.isolated || self.profile_only,
         };
         let prepared = match core::prepare(&req) {
             Ok(plan) => plan,
@@ -412,15 +538,20 @@ impl DesktopApp {
             }
         };
         let library = registry::library_dir();
+        let profile_only = self.profile_only;
         let (tx, rx) = mpsc::channel();
         self.worker = Some(rx);
         std::thread::spawn(move || {
-            let result = core::create_clone(&prepared, &library)
+            let result = (if profile_only {
+                core::create_profile_instance(&prepared, &library)
+            } else {
+                core::create_clone(&prepared, &library)
+            })
                 .map_err(|e| e.to_string())
                 .and_then(|item| {
                     registry::add(item.clone()).map_err(|e| {
                         format!(
-                            "Files copied, but registry save failed: {e}. Location: {}",
+                            "Instance created, but registry save failed: {e}. Location: {}",
                             item.root.display()
                         )
                     })?;
@@ -438,9 +569,9 @@ impl DesktopApp {
             "Clear boundaries. Predictable behavior. Your data stays local.",
         );
         let items = [
-            ("01", "Copy the application", "Only the files you choose are copied to a unique instance folder. The source is not changed."),
-            ("02", "Create a fresh profile", "Environment variables can direct supported applications toward per-clone config and cache directories. This is best effort."),
-            ("03", "Launch independently", "The cloned executable starts as a normal user process. Some apps still enforce single-instance or license restrictions."),
+            ("01", "Discover applications", "Scan supported local application directories without opening or changing installed software."),
+            ("02", "Choose an instance strategy", "Copy portable files, or keep installed app binaries and create a dedicated profile. Known browser adapters use profile flags."),
+            ("03", "Launch with clear boundaries", "The app starts as a normal user process. Single-instance, activation, and OS restrictions still apply."),
             ("04", "Keep control", "Browse each clone's files. Nothing is uploaded, and SoftClone never asks for administrator privileges."),
         ];
         for (number, title, detail) in items {
@@ -480,6 +611,7 @@ impl DesktopApp {
 impl eframe::App for DesktopApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.tick_worker(ctx);
+        self.tick_discovery(ctx);
         self.sidebar(ctx);
         egui::CentralPanel::default()
             .frame(
@@ -529,6 +661,7 @@ impl eframe::App for DesktopApp {
                     match self.page {
                         Page::Library => self.library(ui),
                         Page::Create => self.create(ui),
+                        Page::Discover => self.discover(ui),
                         Page::About => self.about(ui),
                     }
                     ui.add_space(36.0);
