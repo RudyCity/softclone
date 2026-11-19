@@ -13,7 +13,6 @@ use std::{
 // window while Store/MSIX inventory runs in the background.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-
 /// AUMIDs must be one package-family identifier plus one application ID.
 /// Keep it safe to append to shell:AppsFolder without passing untrusted syntax.
 pub fn valid_aumid(input: &str) -> bool {
