@@ -164,7 +164,6 @@ impl DesktopApp {
         }
     }
 
-
     #[cfg(target_os = "windows")]
     fn start_icon_discovery(&mut self) {
         use std::collections::HashSet;
@@ -510,8 +509,16 @@ impl DesktopApp {
         ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
             ui.selectable_value(&mut self.discover_filter, AppFilter::All, "All apps");
-            ui.selectable_value(&mut self.discover_filter, AppFilter::ProfileReady, "Profile-ready");
-            ui.selectable_value(&mut self.discover_filter, AppFilter::NeedsReview, "Requires review");
+            ui.selectable_value(
+                &mut self.discover_filter,
+                AppFilter::ProfileReady,
+                "Profile-ready",
+            );
+            ui.selectable_value(
+                &mut self.discover_filter,
+                AppFilter::NeedsReview,
+                "Requires review",
+            );
             ui.selectable_value(
                 &mut self.discover_filter,
                 AppFilter::MissingExecutable,

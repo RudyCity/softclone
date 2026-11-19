@@ -67,8 +67,14 @@ pub fn matches_app(app: &DiscoveredApp, query: &str, filter: AppFilter) -> bool 
     let query = query.trim().to_lowercase();
     query.is_empty()
         || app.name.to_lowercase().contains(&query)
-        || app.publisher.as_ref().is_some_and(|value| value.to_lowercase().contains(&query))
-        || app.version.as_ref().is_some_and(|value| value.to_lowercase().contains(&query))
+        || app
+            .publisher
+            .as_ref()
+            .is_some_and(|value| value.to_lowercase().contains(&query))
+        || app
+            .version
+            .as_ref()
+            .is_some_and(|value| value.to_lowercase().contains(&query))
         || app.path.to_string_lossy().to_lowercase().contains(&query)
 }
 

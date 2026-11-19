@@ -155,7 +155,6 @@ fn choose_button(ui: &mut Ui, app: &DiscoveredApp) -> bool {
         .clicked()
 }
 
-
 fn app_avatar(ui: &mut Ui, texture: Option<&egui::TextureHandle>) {
     Frame::new()
         .fill(Color32::from_rgb(239, 246, 243))
