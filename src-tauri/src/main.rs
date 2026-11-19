@@ -681,4 +681,3 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("Could not start SoftClone desktop");
 }
-
