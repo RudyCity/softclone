@@ -4,7 +4,7 @@ use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, 
 use softclone::{
     core::{self, CloneRecord, CloneRequest, RunMode},
     registry,
-    universal::{self, DiscoveredApp, Support},
+    universal::{self, AppFilter, DiscoveredApp, Support},
 };
 use std::{
     path::PathBuf,
@@ -38,7 +38,12 @@ pub struct DesktopApp {
     profile_only: bool,
     discovered: Vec<DiscoveredApp>,
     discover_query: String,
+    discover_filter: AppFilter,
     discover_worker: Option<Receiver<Vec<DiscoveredApp>>>,
+    #[cfg(target_os = "windows")]
+    icon_worker: Option<Receiver<(PathBuf, usize, usize, Vec<u8>)>>,
+    #[cfg(target_os = "windows")]
+    app_icons: std::collections::HashMap<PathBuf, egui::TextureHandle>,
     discovery_complete: bool,
     worker: Option<Receiver<Result<CloneRecord, String>>>,
     notice: Option<(String, bool)>,
@@ -72,7 +77,12 @@ impl DesktopApp {
             profile_only: false,
             discovered: Vec::new(),
             discover_query: String::new(),
+            discover_filter: AppFilter::All,
             discover_worker: None,
+            #[cfg(target_os = "windows")]
+            icon_worker: None,
+            #[cfg(target_os = "windows")]
+            app_icons: std::collections::HashMap::new(),
             discovery_complete: false,
             worker: None,
             notice,
@@ -140,6 +150,8 @@ impl DesktopApp {
                     self.discovered = apps;
                     self.discover_worker = None;
                     self.discovery_complete = true;
+                    #[cfg(target_os = "windows")]
+                    self.start_icon_discovery();
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.notice = Some(("App discovery stopped unexpectedly.".into(), true));
@@ -149,6 +161,83 @@ impl DesktopApp {
                     ctx.request_repaint_after(Duration::from_millis(160));
                 }
             }
+        }
+    }
+
+
+    #[cfg(target_os = "windows")]
+    fn start_icon_discovery(&mut self) {
+        use std::collections::HashSet;
+        let mut seen = HashSet::new();
+        let paths: Vec<PathBuf> = self
+            .discovered
+            .iter()
+            .filter(|app| app.launchable && !app.path.as_os_str().is_empty())
+            .filter_map(|app| {
+                if seen.insert(app.path.clone()) {
+                    Some(app.path.clone())
+                } else {
+                    None
+                }
+            })
+            .take(160)
+            .collect();
+        self.app_icons.clear();
+        let (sender, receiver) = mpsc::channel();
+        self.icon_worker = Some(receiver);
+        std::thread::spawn(move || {
+            for path in paths {
+                let Ok(info) = std::fs::metadata(&path) else {
+                    continue;
+                };
+                if !info.is_file() || info.len() > 512 * 1024 * 1024 {
+                    continue;
+                }
+                let Ok(icon) = win_icon_extractor::extract_icon_with_size(&path, 48) else {
+                    continue;
+                };
+                if icon.width == 0 || icon.height == 0 || icon.width > 128 || icon.height > 128 {
+                    continue;
+                }
+                let width = icon.width as usize;
+                let height = icon.height as usize;
+                if icon.rgba.len() != width * height * 4 {
+                    continue;
+                }
+                if sender.send((path, width, height, icon.rgba)).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+
+    #[cfg(target_os = "windows")]
+    fn tick_icons(&mut self, ctx: &egui::Context) {
+        let Some(receiver) = &self.icon_worker else {
+            return;
+        };
+        let mut finished = false;
+        loop {
+            match receiver.try_recv() {
+                Ok((path, width, height, rgba)) => {
+                    let texture = ctx.load_texture(
+                        format!("installed-app:{}", path.display()),
+                        egui::ColorImage::from_rgba_unmultiplied([width, height], &rgba),
+                        egui::TextureOptions::LINEAR,
+                    );
+                    self.app_icons.insert(path, texture);
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    finished = true;
+                    break;
+                }
+            }
+        }
+        if finished {
+            self.icon_worker = None;
+        } else {
+            ctx.request_repaint_after(Duration::from_millis(150));
         }
     }
 
@@ -399,18 +488,13 @@ impl DesktopApp {
             ui,
             "Installed applications",
             "Discover your apps",
-            "Browse registered installed apps, then choose a safe instance strategy.",
+            "Browse installed software and see which instance methods are supported.",
         );
 
-        let filter = self.discover_query.trim().to_lowercase();
         let visible = self
             .discovered
             .iter()
-            .filter(|app| {
-                filter.is_empty()
-                    || app.name.to_lowercase().contains(&filter)
-                    || app.path.to_string_lossy().to_lowercase().contains(&filter)
-            })
+            .filter(|app| universal::matches_app(app, &self.discover_query, self.discover_filter))
             .count();
         let toolbar = discovery_form::DiscoveryToolbar {
             query: &mut self.discover_query,
@@ -423,19 +507,25 @@ impl DesktopApp {
         if toolbar.rescan {
             self.start_discovery();
         }
-        ui.add_space(10.0);
+        ui.add_space(12.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.selectable_value(&mut self.discover_filter, AppFilter::All, "All apps");
+            ui.selectable_value(&mut self.discover_filter, AppFilter::ProfileReady, "Profile-ready");
+            ui.selectable_value(&mut self.discover_filter, AppFilter::NeedsReview, "Requires review");
+            ui.selectable_value(
+                &mut self.discover_filter,
+                AppFilter::MissingExecutable,
+                "Missing executable",
+            );
+        });
+        ui.add_space(6.0);
         discovery_form::compatibility_note(ui);
         ui.add_space(18.0);
 
-        let filter = self.discover_query.trim().to_lowercase();
         let matches: Vec<_> = self
             .discovered
             .iter()
-            .filter(|app| {
-                filter.is_empty()
-                    || app.name.to_lowercase().contains(&filter)
-                    || app.path.to_string_lossy().to_lowercase().contains(&filter)
-            })
+            .filter(|app| universal::matches_app(app, &self.discover_query, self.discover_filter))
             .cloned()
             .collect();
         if matches.is_empty() && self.discover_worker.is_none() {
@@ -452,12 +542,16 @@ impl DesktopApp {
                     );
                     crate::components::fields::helper(
                         ui,
-                        "Try another search, rescan your applications, or enter a source path under Create clone.",
+                        "Adjust the search or filter, rescan your applications, or choose an executable under Create clone.",
                     );
                 });
         }
         for app in matches {
-            if discovery_form::app_card(ui, &app) {
+            #[cfg(target_os = "windows")]
+            let texture = self.app_icons.get(&app.path);
+            #[cfg(not(target_os = "windows"))]
+            let texture = None;
+            if discovery_form::app_card(ui, &app, texture) {
                 self.source = app.path.display().to_string();
                 self.name = format!("{} copy", app.name);
                 self.entrypoint.clear();
@@ -491,6 +585,27 @@ impl DesktopApp {
         .show(ui);
         if let Some(message) = action.error {
             self.notice = Some((message, true));
+        }
+        if action.browse_file || action.browse_folder {
+            // Native OS dialog is modal; it intentionally runs on the UI thread,
+            // as required by some macOS windowing integrations.
+            let dialog = rfd::FileDialog::new();
+            let selected = if action.browse_folder {
+                dialog.pick_folder()
+            } else {
+                dialog.pick_file()
+            };
+            if let Some(path) = selected {
+                self.source = path.display().to_string();
+                if self.name.trim().is_empty() {
+                    let label = path
+                        .file_stem()
+                        .or_else(|| path.file_name())
+                        .map(|part| part.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "My app".into());
+                    self.name = format!("{label} copy");
+                }
+            }
         }
         if action.submit {
             self.submit();
@@ -594,6 +709,8 @@ impl eframe::App for DesktopApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.tick_worker(ctx);
         self.tick_discovery(ctx);
+        #[cfg(target_os = "windows")]
+        self.tick_icons(ctx);
         self.sidebar(ctx);
         egui::CentralPanel::default()
             .frame(
