@@ -1,0 +1,4 @@
+// An embedded, data-only naming rule. No filesystem or process access.
+pub fn clone_label(base, index) {
+    `${base} copy ${index}`
+}
