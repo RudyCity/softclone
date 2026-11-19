@@ -63,3 +63,11 @@ Windows discovery now reads the native **Apps & Features / Installed Programs re
 Registered software without a known safe launch path remains visible but cannot be selected automatically; provide the executable path manually instead. Microsoft Store/MSIX apps are not supported by this reader yet.
 
 The navigation and status UI uses **native egui-painted vector icons**, not Unicode glyphs or system icon fonts. This avoids missing-glyph boxes on Windows, macOS and Linux. See [the release notes](docs/releases/v0.2.1.md).
+
+### Reusable desktop form components (0.2.2)
+
+Every form is now composed from reusable egui components under `src/components/`: `fields.rs` (text input, label, helper text, section dividers and integrated search icon), `discovery_form.rs` (search/rescan/status controls and responsive app cards), and `create_form.rs` (source, instance details, strategy and submit sections).
+
+Discover search and Rescan are grouped in a unified toolbar, while scanning progress and match counts occupy their own status line. Explanatory text wraps instead of extending outside the viewport. The interface supports narrow and wide desktop content areas without detached search icons. Creation keeps its validation and existing Rune name suggestions.
+
+This is a presentation and organization update; it does not claim new OS-level cloning isolation. [Release notes](docs/releases/v0.2.2.md).

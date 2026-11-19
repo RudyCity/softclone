@@ -42,3 +42,7 @@ The Windows discovery source reads native uninstall records from HKLM and HKCU i
 All registry operations are read-only, and no installed application's configuration is modified by discovery. Discovery remains background-threaded. Full profile independence is only promised for known compatible adapters.
 
 UI icons are drawn using egui Painter vector strokes, avoiding unsupported Unicode glyph fonts.
+
+## UI modularity (v0.2.2)
+
+The desktop shell owns navigation, registry integration, background workers and global notices. Form components own only presentation and controlled input changes: shared fields, the installed-application search toolbar and result cards, and the clone creation steps. Form components return user actions to the shell, which handles process/IO operations. Scanning and instance creation remain off the UI thread. This separation makes form styling reusable and avoids loading indicators affecting search input layout.

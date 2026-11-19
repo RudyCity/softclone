@@ -11,3 +11,10 @@ The named Antislop / Taste Design v1 skill files were not installed here. This p
 ## Compatibility-led UX
 
 Installed app discovery has a read-only scan, search and a single explicit selection action. The selected source passes into the creation form, which asks whether to copy files or create a profile-only instance. Support notes distinguish known browser adapters from experimental generic application handling. No fake universal-success states or security claims.
+
+## Reusable form components (v0.2.2)
+
+- `src/components/fields.rs` is the shared label/input/helper/section visual vocabulary.
+- `src/components/discovery_form.rs` contains an integrated search field with its icon inside the input, a distinct Rescan action, loading/loaded status, and responsive application cards. Avoid placing status strings into horizontal toolbars that can clip.
+- `src/components/create_form.rs` owns source, details, strategy, and submit forms. Inputs use consistent heights; helper notes wrap; invalid submissions stay disabled; persistent work remains outside the view component.
+- All forms share the same neutral palette and border system and adapt to available content width, not absolute screen coordinates.
