@@ -107,6 +107,67 @@ pub fn rename(record: &CloneRecord, name: &str, registry_path: &Path) -> core::R
     Ok(())
 }
 
+/// Duplicate an existing managed instance into a new independent folder.
+///
+/// This copies only the SoftClone-owned instance directory. The original
+/// vendor installation is never copied or modified.
+pub fn duplicate(
+    record: &CloneRecord,
+    name: &str,
+    library: &Path,
+    registry_path: &Path,
+) -> core::Result<CloneRecord> {
+    validate_member(record, registry_path)?;
+    let source = validated_root(record, library)?;
+    let name = core::validate_name(name)?;
+    let library = fs::canonicalize(library)?;
+    let id = Uuid::new_v4();
+    let staging = library.join(format!(".duplicate-{id}.partial"));
+    let destination = library.join(format!("duplicate-{id}"));
+    fs::create_dir(&staging)?;
+    let copied = safe_copy_tree(&source, &staging);
+    let (bytes, _) = match copied {
+        Ok(result) => result,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&staging);
+            return Err(error);
+        }
+    };
+    if let Err(error) = fs::rename(&staging, &destination) {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(error.into());
+    }
+    let mut new_record = record.clone();
+    new_record.id = id;
+    new_record.name = name;
+    new_record.root = destination.clone();
+    new_record.created_epoch_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    new_record.copied_bytes = if new_record.run_mode == core::RunMode::Copy {
+        bytes
+    } else {
+        0
+    };
+    let added = (|| -> core::Result<()> {
+        let mut items = registry::load(registry_path)?;
+        items.insert(0, new_record.clone());
+        registry::store(registry_path, &items)?;
+        Ok(())
+    })();
+    if let Err(error) = added {
+        if let Err(cleanup) = fs::remove_dir_all(&destination) {
+            return Err(invalid(format!(
+                "Failed to register duplicate: {error}. Cleanup failed at {}: {cleanup}",
+                destination.display()
+            )));
+        }
+        return Err(error);
+    }
+    Ok(new_record)
+}
+
 /// Create an on-disk backup under SoftClone's private backup root.
 pub fn backup(
     record: &CloneRecord,
@@ -332,6 +393,19 @@ mod tests {
         assert_eq!(registry::load(&db).unwrap()[0].name, "New label");
         assert!(instance.root.join("payload/app.exe").exists());
         assert!(rename(&instance, "../wrong", &db).is_err());
+    }
+
+    #[test]
+    fn duplicate_creates_separate_instance_and_registry_entry() {
+        let (_dir, instance, library, _backups, db) = fixture();
+        let second = duplicate(&instance, "Independent", &library, &db).unwrap();
+        assert_ne!(instance.root, second.root);
+        assert_ne!(instance.id, second.id);
+        assert_eq!(second.name, "Independent");
+        assert_eq!(fs::read(second.root.join("payload/app.exe")).unwrap(), b"v1");
+        fs::write(second.root.join("payload/app.exe"), b"v2").unwrap();
+        assert_eq!(fs::read(instance.root.join("payload/app.exe")).unwrap(), b"v1");
+        assert_eq!(registry::load(&db).unwrap().len(), 2);
     }
 
     #[test]
