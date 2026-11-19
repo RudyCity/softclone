@@ -233,6 +233,7 @@ pub fn parse_desktop_file(content: &str) -> Option<(String, String)> {
     Some((name?, first_exec_token(&exec?)?))
 }
 
+#[cfg(target_os = "linux")]
 fn resolve_binary(binary: &str) -> Option<PathBuf> {
     let path = PathBuf::from(binary);
     if path.is_absolute() {
