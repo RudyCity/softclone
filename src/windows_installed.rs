@@ -94,33 +94,84 @@ fn safe_exe(path: &Path) -> bool {
     .any(|fragment| name.contains(fragment))
 }
 
-fn locate_app(name: &str, display_icon: Option<&str>, location: Option<&str>) -> Option<PathBuf> {
-    if let Some(icon) = display_icon.and_then(parse_display_icon) {
-        let path = PathBuf::from(expand_windows_env(&icon));
-        if safe_exe(&path) {
-            return Some(path);
+/// Installed plugins are not independent desktop applications.
+pub fn is_known_component(name: &str) -> bool {
+    name.to_ascii_lowercase().starts_with("advanced-scene-switcher")
+}
+
+fn expected_primary_exes(name: &str) -> &'static [&'static str] {
+    let name = name.to_ascii_lowercase();
+    if name == "android studio" || name.starts_with("android studio ") {
+        &["studio64.exe", "studio.exe"]
+    } else if name.starts_with("adobe illustrator") {
+        &["illustrator.exe"]
+    } else {
+        &[]
+    }
+}
+
+fn primary_exe_matches(name: &str, file: &Path) -> bool {
+    let expected = expected_primary_exes(name);
+    expected.is_empty()
+        || file.file_name().is_some_and(|basename| {
+            expected.iter().any(|candidate| basename.eq_ignore_ascii_case(candidate))
+        })
+}
+
+fn known_install_roots(name: &str) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    let normalized = name.to_ascii_lowercase();
+    for var in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(base) = env::var_os(var) {
+            let base = PathBuf::from(base);
+            if normalized == "android studio" || normalized.starts_with("android studio ") {
+                roots.push(base.join("Android").join("Android Studio"));
+            } else if normalized.starts_with("adobe illustrator") {
+                roots.push(base.join("Adobe").join(name));
+            }
         }
     }
-    let root = PathBuf::from(expand_windows_env(location?.trim().trim_matches('"')));
+    roots
+}
+
+fn locate_in_root(name: &str, root: &Path) -> Option<PathBuf> {
     if !root.is_dir() {
         return None;
+    }
+    // First check vendor-documented primary launchers; never pick an arbitrary
+    // helper or uninstaller just because it is the only executable present.
+    for filename in expected_primary_exes(name) {
+        for directory in [
+            root.to_path_buf(),
+            root.join("bin"),
+            root.join("Support Files").join("Contents").join("Windows"),
+        ] {
+            let candidate = directory.join(filename);
+            if safe_exe(&candidate) {
+                return Some(candidate);
+            }
+        }
     }
     let normalized_name = normalize(name);
     let mut best = None;
     let mut best_score = 0;
     for entry in walkdir::WalkDir::new(root)
-        .max_depth(4)
+        .max_depth(7)
         .follow_links(false)
         .into_iter()
         .filter_map(|value| value.ok())
-        .take(700)
+        .take(1400)
     {
         let file = entry.path();
-        if !safe_exe(file) {
+        if !safe_exe(file) || !primary_exe_matches(name, file) {
             continue;
         }
         let stem = normalize(&file.file_stem()?.to_string_lossy());
-        let score = if stem == normalized_name {
+        let score = if expected_primary_exes(name).iter().any(|exe| {
+            file.file_name().is_some_and(|actual| actual.eq_ignore_ascii_case(exe))
+        }) {
+            4
+        } else if stem == normalized_name {
             3
         } else if adapter_for(file).is_some() && normalized_name.contains(&stem) {
             2
@@ -133,6 +184,32 @@ fn locate_app(name: &str, display_icon: Option<&str>, location: Option<&str>) ->
         }
     }
     best
+}
+
+fn locate_app(name: &str, display_icon: Option<&str>, location: Option<&str>) -> Option<PathBuf> {
+    if is_known_component(name) {
+        return None;
+    }
+    if let Some(icon) = display_icon.and_then(parse_display_icon) {
+        let path = PathBuf::from(expand_windows_env(&icon));
+        if safe_exe(&path) && primary_exe_matches(name, &path) {
+            return Some(path);
+        }
+    }
+    let mut roots = Vec::new();
+    if let Some(location) = location {
+        let location = location.trim().trim_matches('"');
+        if !location.is_empty() {
+            roots.push(PathBuf::from(expand_windows_env(location)));
+        }
+    }
+    roots.extend(known_install_roots(name));
+    for root in roots {
+        if let Some(path) = locate_in_root(name, &root) {
+            return Some(path);
+        }
+    }
+    None
 }
 
 fn register(results: &mut HashMap<String, DiscoveredApp>, app: DiscoveredApp) {
@@ -200,8 +277,10 @@ fn installed_programs(results: &mut HashMap<String, DiscoveredApp>) {
                 } else {
                     Support::ReviewRequired
                 };
-                let note = if !launchable {
-                    "Registered installed app; no usable executable found. Use a manual source path."
+                let note = if is_known_component(name) {
+                    "OBS Studio plug-in: open OBS to use it. This entry cannot be launched or cloned as a standalone desktop application."
+                } else if !launchable {
+                    "Installed-program registry entry found, but no safe launch executable was resolved. Choose its executable manually."
                 } else if support == Support::ProfileAdapter {
                     "Registered app with documented per-instance arguments (browser profiles or Zoom Windows multi-instance)."
                 } else {
@@ -310,6 +389,43 @@ mod tests {
             Some(r"C:\Program Files\Example\app.exe")
         );
         assert_eq!(parse_display_icon("shell32.dll,0"), None);
+    }
+
+    #[test]
+    fn known_program_names_map_to_real_launchers() {
+        assert_eq!(expected_primary_exes("Android Studio"), &["studio64.exe", "studio.exe"]);
+        assert_eq!(expected_primary_exes("Adobe Illustrator 2026"), &["illustrator.exe"]);
+        assert!(primary_exe_matches("Android Studio", Path::new("studio64.exe")));
+        assert!(!primary_exe_matches("Android Studio", Path::new("uninstall.exe")));
+        assert!(!primary_exe_matches("Adobe Illustrator 2026", Path::new("Creative Cloud.exe")));
+        assert!(is_known_component("advanced-scene-switcher version 1.26.2"));
+        assert!(!is_known_component("OBS Studio"));
+        assert!(!is_known_component("Android Studio"));
+    }
+
+    #[test]
+    fn resolves_known_nested_exes_without_choosing_helpers() {
+        let temp = tempfile::tempdir().unwrap();
+        let android = temp.path().join("android");
+        std::fs::create_dir_all(android.join("bin")).unwrap();
+        std::fs::write(android.join("bin/studio64.exe"), b"test").unwrap();
+        std::fs::write(android.join("bin/updater.exe"), b"test").unwrap();
+        assert_eq!(
+            locate_app("Android Studio", None, android.to_str()),
+            Some(android.join("bin/studio64.exe"))
+        );
+        let adobe = temp.path().join("adobe");
+        let nested = adobe.join("Support Files/Contents/Windows");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("Illustrator.exe"), b"test").unwrap();
+        assert_eq!(
+            locate_app("Adobe Illustrator 2026", None, adobe.to_str()),
+            Some(nested.join("Illustrator.exe"))
+        );
+        assert_eq!(
+            locate_app("advanced-scene-switcher version 1.26.2", None, adobe.to_str()),
+            None
+        );
     }
 
     #[test]
