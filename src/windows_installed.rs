@@ -458,9 +458,11 @@ mod tests {
         let nested = adobe.join("Support Files/Contents/Windows");
         std::fs::create_dir_all(&nested).unwrap();
         std::fs::write(nested.join("Illustrator.exe"), b"test").unwrap();
+        let found = locate_app("Adobe Illustrator 2026", None, adobe.to_str())
+            .expect("Illustrator launcher should be resolved");
         assert_eq!(
-            locate_app("Adobe Illustrator 2026", None, adobe.to_str()),
-            Some(nested.join("Illustrator.exe"))
+            std::fs::canonicalize(found).unwrap(),
+            std::fs::canonicalize(nested.join("Illustrator.exe")).unwrap()
         );
         assert_eq!(
             locate_app(
