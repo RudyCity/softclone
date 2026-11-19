@@ -180,48 +180,60 @@ fn windows_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
     if let Some(local) = env::var_os("LOCALAPPDATA") {
         roots.push(PathBuf::from(local).join("Programs"));
     }
+
+    // Installed browsers are frequently nested, for example:
+    // Program Files/Google/Chrome/Application/chrome.exe.
+    // Walk a bounded number of entries without following junctions/symlinks.
+    let mut known = Vec::new();
+    let mut likely = Vec::new();
+    let mut others = Vec::new();
     for root in roots {
-        let Ok(children) = fs::read_dir(root) else {
-            continue;
-        };
-        for child in children.flatten().take(500) {
-            let folder = child.path();
-            if !folder.is_dir() {
+        for entry in walkdir::WalkDir::new(root)
+            .max_depth(5)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+            .take(12000)
+        {
+            if !entry.file_type().is_file() {
                 continue;
             }
-            let title = child.file_name().to_string_lossy().into_owned();
-            let Ok(contents) = fs::read_dir(folder) else {
+            let path = entry.path();
+            if !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
                 continue;
-            };
-            let mut exe = None;
-            for entry in contents.flatten().take(120) {
-                let file = entry.path();
-                let fname = entry.file_name().to_string_lossy().to_lowercase();
-                if !file.is_file() || !fname.ends_with(".exe") {
-                    continue;
-                }
-                if [
-                    "uninstall",
-                    "setup",
-                    "update",
-                    "helper",
-                    "crash",
-                    "service",
-                    "install",
-                ]
+            }
+            let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+            let lowercase = name.to_lowercase();
+            if ["uninstall", "setup", "update", "helper", "crash", "service", "install", "broker"]
                 .iter()
-                .any(|word| fname.contains(word))
-                {
-                    continue;
-                }
-                if fname.trim_end_matches(".exe") == title.to_lowercase() || exe.is_none() {
-                    exe = Some(file);
-                }
+                .any(|word| lowercase.contains(word))
+            {
+                continue;
             }
-            if let Some(executable) = exe {
-                add(items, seen, candidate(title, executable, true));
+            let parent_name = path.parent()
+                .and_then(|parent| parent.file_name())
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let parent_name = if ["application", "bin", "x64"].contains(&parent_name.to_lowercase().as_str()) {
+                path.parent().and_then(|p| p.parent()).and_then(|p| p.file_name())
+                    .unwrap_or_default().to_string_lossy().to_string()
+            } else {
+                parent_name
+            };
+            let app_name = if parent_name.is_empty() { name.clone() } else { parent_name };
+            let app = candidate(app_name, path.to_path_buf(), true);
+            if app.support == Support::ProfileAdapter {
+                known.push(app);
+            } else if app_name.eq_ignore_ascii_case(&name) {
+                likely.push(app);
+            } else {
+                others.push(app);
             }
         }
+    }
+    for app in known.into_iter().chain(likely).chain(others).take(300) {
+        add(items, seen, app);
     }
 }
 
