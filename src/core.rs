@@ -31,6 +31,14 @@ pub struct CloneRequest {
     pub isolated_profile: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RunMode {
+    #[default]
+    Copy,
+    ProfileOnly,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CloneRecord {
     pub id: Uuid,
@@ -39,6 +47,8 @@ pub struct CloneRecord {
     pub root: PathBuf,
     pub entrypoint: PathBuf,
     pub isolated_profile: bool,
+    #[serde(default)]
+    pub run_mode: RunMode,
     pub created_epoch_secs: u64,
     pub copied_bytes: u64,
 }
@@ -315,6 +325,7 @@ pub fn create_clone(prepared: &Prepared, library_dir: &Path) -> Result<CloneReco
         root,
         entrypoint: prepared.entrypoint.clone(),
         isolated_profile: prepared.isolated_profile,
+        run_mode: RunMode::Copy,
         created_epoch_secs: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -323,28 +334,115 @@ pub fn create_clone(prepared: &Prepared, library_dir: &Path) -> Result<CloneReco
     })
 }
 
-/// Launches by direct process API, never via an interpolated command string.
+/// Creates a separate profile without duplicating installed application binaries.
+/// The original application will be launched; its files are never modified here.
+pub fn create_profile_instance(prepared: &Prepared, library_dir: &Path) -> Result<CloneRecord> {
+    fs::create_dir_all(library_dir)?;
+    let library = fs::canonicalize(library_dir)?;
+    let id = Uuid::new_v4();
+    let root = library.join(format!("profile-{id}"));
+    fs::create_dir(&root)?;
+    let result = (|| -> Result<()> {
+        for sub in ["config", "data", "cache", "roaming", "local", "browser", "firefox"] {
+            fs::create_dir_all(root.join("profile").join(sub))?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        let _ = fs::remove_dir_all(&root);
+        return Err(error);
+    }
+    Ok(CloneRecord {
+        id,
+        name: prepared.name.clone(),
+        source: prepared.source.clone(),
+        root,
+        entrypoint: prepared.entrypoint.clone(),
+        isolated_profile: true,
+        run_mode: RunMode::ProfileOnly,
+        created_epoch_secs: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        copied_bytes: 0,
+    })
+}
+
+/// Launches a copied app or a managed profile of an installed app.
+/// Profiles are best-effort; this is not a sandbox or license bypass.
 pub fn launch(record: &CloneRecord) -> Result<Child> {
-    let payload = fs::canonicalize(record.root.join("payload"))?;
-    let target = fs::canonicalize(payload.join(&record.entrypoint))?;
-    if !target.starts_with(&payload) || !can_launch(&target) {
+    let (target, working_dir) = match record.run_mode {
+        RunMode::Copy => {
+            let payload = fs::canonicalize(record.root.join("payload"))?;
+            let target = fs::canonicalize(payload.join(&record.entrypoint))?;
+            if !target.starts_with(&payload) {
+                return Err(CloneError::Invalid(
+                    "Cloned executable is outside its payload.".into(),
+                ));
+            }
+            (target, payload)
+        }
+        RunMode::ProfileOnly => {
+            let source = fs::canonicalize(&record.source)?;
+            if !source.is_file() && !source.is_dir() {
+                return Err(CloneError::Invalid("Original app is no longer available.".into()));
+            }
+            let (target, directory) = if source.is_dir() {
+                let target = if is_app_bundle(&source) {
+                    source.clone()
+                } else {
+                    let relative = safe_relative(
+                        record.entrypoint.to_str().ok_or_else(|| {
+                            CloneError::Invalid("Entrypoint contains invalid characters.".into())
+                        })?,
+                    )?;
+                    fs::canonicalize(source.join(relative))?
+                };
+                if !target.starts_with(&source) {
+                    return Err(CloneError::Invalid(
+                        "Entrypoint escaped original application folder.".into(),
+                    ));
+                }
+                (target, source)
+            } else {
+                let directory = source.parent()
+                    .ok_or_else(|| CloneError::Invalid("Executable has no parent.".into()))?
+                    .to_path_buf();
+                (source, directory)
+            };
+            (target, directory)
+        }
+    };
+    if !can_launch(&target) {
         return Err(CloneError::Invalid(
-            "Cloned executable is unavailable or outside its payload.".into(),
+            "The executable is missing or cannot launch on this OS.".into(),
         ));
     }
+
+    let profile = record.root.join("profile");
+    let arguments = if record.isolated_profile {
+        for sub in ["config", "data", "cache", "roaming", "local", "browser", "firefox"] {
+            fs::create_dir_all(profile.join(sub))?;
+        }
+        crate::universal::adapter_args(&target, &profile)
+    } else {
+        Vec::new()
+    };
+
     let mut command = if is_app_bundle(&target) {
         let mut cmd = Command::new("open");
         cmd.args(["-n", "-a"]).arg(&target);
+        if !arguments.is_empty() {
+            cmd.arg("--args").args(&arguments);
+        }
         cmd
     } else {
-        Command::new(&target)
+        let mut cmd = Command::new(&target);
+        cmd.args(&arguments);
+        cmd
     };
-    command.current_dir(&payload);
+    command.current_dir(&working_dir);
     if record.isolated_profile {
-        let profile = record.root.join("profile");
-        for sub in ["config", "data", "cache", "roaming", "local"] {
-            fs::create_dir_all(profile.join(sub))?;
-        }
         command.env("SOFTCLONE_PROFILE_DIR", &profile);
         command.env("XDG_CONFIG_HOME", profile.join("config"));
         command.env("XDG_DATA_HOME", profile.join("data"));

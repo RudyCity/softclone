@@ -147,3 +147,40 @@ fn direct_launch_receives_profile_environment() {
         instance.root.join("profile/config").display().to_string()
     );
 }
+
+#[test]
+fn profile_only_instance_does_not_copy_executable() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let source = make_source(sandbox.path());
+    let prepared = core::prepare(&CloneRequest {
+        source: source.clone(),
+        name: "Installed profile".into(),
+        entrypoint: String::new(),
+        isolated_profile: true,
+    }).unwrap();
+    let record = core::create_profile_instance(&prepared, &sandbox.path().join("instances")).unwrap();
+    assert_eq!(record.run_mode, core::RunMode::ProfileOnly);
+    assert!(!record.root.join("payload").exists());
+    assert!(record.root.join("profile/browser").is_dir());
+    assert!(source.join("notes.txt").exists());
+
+    let path = sandbox.path().join("reg.json");
+    registry::store(&path, std::slice::from_ref(&record)).unwrap();
+    assert_eq!(registry::load(&path).unwrap()[0].run_mode, core::RunMode::ProfileOnly);
+}
+
+#[test]
+fn legacy_registry_defaults_to_copy_mode() {
+    let json = r#"{
+        "id":"aeaa924f-f8c4-47c0-8567-a08675f62aee",
+        "name":"Old clone",
+        "source":"/old",
+        "root":"/clone",
+        "entrypoint":"app",
+        "isolated_profile":false,
+        "created_epoch_secs":0,
+        "copied_bytes":24
+    }"#;
+    let record: core::CloneRecord = serde_json::from_str(json).unwrap();
+    assert_eq!(record.run_mode, core::RunMode::Copy);
+}
