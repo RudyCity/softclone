@@ -199,29 +199,55 @@ fn windows_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
                 continue;
             }
             let path = entry.path();
-            if !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
-                continue;
-            }
-            let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-            let lowercase = name.to_lowercase();
-            if ["uninstall", "setup", "update", "helper", "crash", "service", "install", "broker"]
-                .iter()
-                .any(|word| lowercase.contains(word))
+            if !path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
             {
                 continue;
             }
-            let parent_name = path.parent()
+            let name = path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let lowercase = name.to_lowercase();
+            if [
+                "uninstall",
+                "setup",
+                "update",
+                "helper",
+                "crash",
+                "service",
+                "install",
+                "broker",
+            ]
+            .iter()
+            .any(|word| lowercase.contains(word))
+            {
+                continue;
+            }
+            let parent_name = path
+                .parent()
                 .and_then(|parent| parent.file_name())
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string();
-            let parent_name = if ["application", "bin", "x64"].contains(&parent_name.to_lowercase().as_str()) {
-                path.parent().and_then(|p| p.parent()).and_then(|p| p.file_name())
-                    .unwrap_or_default().to_string_lossy().to_string()
+            let parent_name =
+                if ["application", "bin", "x64"].contains(&parent_name.to_lowercase().as_str()) {
+                    path.parent()
+                        .and_then(|p| p.parent())
+                        .and_then(|p| p.file_name())
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string()
+                } else {
+                    parent_name
+                };
+            let app_name = if parent_name.is_empty() {
+                name.clone()
             } else {
                 parent_name
             };
-            let app_name = if parent_name.is_empty() { name.clone() } else { parent_name };
             let app = candidate(app_name, path.to_path_buf(), true);
             if app.support == Support::ProfileAdapter {
                 known.push(app);
