@@ -3,6 +3,7 @@ use crate::components::{
     discovery_form,
     instance_card::{self, Action as InstanceAction},
 };
+use crate::diagnostics::{Event as DiagnosticEvent, Filter as LogFilter, Level as LogLevel, LogBook};
 use crate::icons::{self, Icon};
 use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2};
 use softclone::{
@@ -37,6 +38,8 @@ enum Page {
     Library,
     Create,
     Discover,
+    Diagnostics,
+    Guide,
     About,
 }
 
@@ -101,6 +104,10 @@ pub struct DesktopApp {
     confirm_name: String,
     restore_options: Vec<BackupInfo>,
     restore_selected: Option<Uuid>,
+    diagnostics: LogBook,
+    log_filter: LogFilter,
+    log_search: String,
+    confirm_clear_logs: bool,
 }
 
 impl DesktopApp {
@@ -121,6 +128,11 @@ impl DesktopApp {
                 Some((format!("Cannot read clone registry: {e}"), true)),
             ),
         };
+        let mut diagnostics = LogBook::load(registry::app_data_dir().join("diagnostics.jsonl"));
+        diagnostics.record(DiagnosticEvent::ApplicationStarted);
+        if notice.is_some() {
+            diagnostics.record(DiagnosticEvent::RegistryLoadFailed);
+        }
         Self {
             page: Page::Library,
             items,
@@ -153,7 +165,15 @@ impl DesktopApp {
             confirm_name: String::new(),
             restore_options: Vec::new(),
             restore_selected: None,
+            diagnostics,
+            log_filter: LogFilter::All,
+            log_search: String::new(),
+            confirm_clear_logs: false,
         }
+    }
+
+    fn log_event(&mut self, event: DiagnosticEvent) {
+        self.diagnostics.record(event);
     }
 
     fn analysis_key(&self) -> String {
@@ -445,16 +465,33 @@ impl DesktopApp {
                         self.start_discovery();
                     }
                 }
-                ui.add_space(24.0);
+                ui.add_space(20.0);
                 ui.label(
-                    RichText::new("PREFERENCES")
+                    RichText::new("TOOLS")
                         .color(Color32::from_rgb(125, 147, 149))
                         .size(10.0)
                         .strong(),
                 );
                 ui.add_space(8.0);
-                if Self::nav_button(ui, Icon::Info, "How it works", self.page == Page::About) {
+                if Self::nav_button(ui, Icon::Activity, "Debug logs", self.page == Page::Diagnostics) {
+                    self.page = Page::Diagnostics;
+                }
+                ui.add_space(18.0);
+                ui.label(
+                    RichText::new("INFORMATION")
+                        .color(Color32::from_rgb(125, 147, 149))
+                        .size(10.0)
+                        .strong(),
+                );
+                ui.add_space(8.0);
+                if Self::nav_button(ui, Icon::Info, "How it works", self.page == Page::Guide) {
+                    self.page = Page::Guide;
+                }
+                if Self::nav_button(ui, Icon::Info, "About SoftClone", self.page == Page::About) {
                     self.page = Page::About;
+                }
+                if Self::nav_button(ui, Icon::Heart, "Support development", false) {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab("https://ko-fi.com/rudycity"));
                 }
                 ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
                     ui.label(
@@ -1238,7 +1275,7 @@ impl DesktopApp {
         });
     }
 
-    fn about(&mut self, ui: &mut egui::Ui) {
+    fn how_it_works(&mut self, ui: &mut egui::Ui) {
         Self::headline(
             ui,
             "A closer look",
@@ -1281,6 +1318,253 @@ impl DesktopApp {
             if let Err(e) = core::open_folder(&registry::app_data_dir()) {
                 self.notice = Some((e.to_string(), true));
             }
+        }
+    }
+    fn about(&mut self, ui: &mut egui::Ui) {
+        Self::headline(
+            ui,
+            "Information",
+            "About SoftClone",
+            "A local-first application instance workspace built with Rust.",
+        );
+        Frame::new()
+            .fill(WHITE)
+            .stroke(Stroke::new(1.0_f32, LINE))
+            .corner_radius(12)
+            .inner_margin(22)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    icons::inline(ui, Icon::Layers, 34.0, ACCENT);
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("SoftClone").size(23.0).color(INK).strong());
+                        ui.label(
+                            RichText::new(format!(
+                                "Version {}  ·  {}",
+                                env!("CARGO_PKG_VERSION"),
+                                std::env::consts::OS
+                            ))
+                            .color(MUTED),
+                        );
+                    });
+                });
+                ui.add_space(12.0);
+                ui.label(
+                    RichText::new("Local data, clear compatibility boundaries.")
+                        .size(15.0)
+                        .color(INK),
+                );
+                crate::components::fields::helper(
+                    ui,
+                    "SoftClone manages portable copies and supported separate profiles. It is not a full OS container and cannot guarantee multi-instance behavior for every installed app.",
+                );
+                ui.add_space(12.0);
+                ui.label(RichText::new("License  ·  MIT").size(13.0).color(MUTED));
+                ui.hyperlink_to("Source code and issue tracker", env!("CARGO_PKG_REPOSITORY"));
+                if icons::button(ui, Icon::FolderOpen, "Open local data folder", None).clicked() {
+                    if let Err(error) = core::open_folder(&registry::app_data_dir()) {
+                        self.notice = Some((format!("Could not open local folder: {error}"), true));
+                    }
+                }
+            });
+        ui.add_space(18.0);
+        Frame::new()
+            .fill(WHITE)
+            .stroke(Stroke::new(1.0_f32, LINE))
+            .corner_radius(12)
+            .inner_margin(22)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    icons::inline(ui, Icon::Heart, 26.0, ACCENT);
+                    ui.vertical(|ui| {
+                        ui.label(
+                            RichText::new("Support development")
+                                .size(17.0)
+                                .color(INK)
+                                .strong(),
+                        );
+                        ui.label(
+                            RichText::new(
+                                "SoftClone is local-first. Donations are optional and never required to use it."
+                            )
+                            .size(12.5)
+                            .color(MUTED),
+                        );
+                    });
+                });
+                ui.add_space(8.0);
+                ui.hyperlink_to("Donate on Ko-fi · rudycity", "https://ko-fi.com/rudycity");
+                crate::components::fields::helper(
+                    ui,
+                    "The donation page opens externally. SoftClone does not collect payment information.",
+                );
+            });
+    }
+
+    fn diagnostics(&mut self, ui: &mut egui::Ui) {
+        Self::headline(
+            ui,
+            "Developer tools",
+            "Debug logs",
+            "Local event history for investigating discovery, cloning and instance management.",
+        );
+        let error_count = self
+            .diagnostics
+            .entries()
+            .iter()
+            .filter(|entry| entry.level() == LogLevel::Error)
+            .count();
+        ui.horizontal_wrapped(|ui| {
+            Self::stat(ui, &self.diagnostics.entries().len().to_string(), "Recent events");
+            Self::stat(ui, &error_count.to_string(), "Errors");
+            Self::stat(ui, &self.items.len().to_string(), "Managed instances");
+        });
+        ui.add_space(18.0);
+        Frame::new()
+            .fill(WHITE)
+            .stroke(Stroke::new(1.0_f32, LINE))
+            .corner_radius(12)
+            .inner_margin(18)
+            .show(ui, |ui| {
+                crate::components::fields::helper(
+                    ui,
+                    "Logs contain fixed event types and timestamps only: no paths, app names, tokens, clipboard contents or profile data. Saved locally with a 128 KB active-file limit and a single rotated copy.",
+                );
+                if let Some(error) = self.diagnostics.storage_error() {
+                    ui.label(RichText::new(error).color(Color32::from_rgb(160, 62, 48)));
+                }
+                ui.add_space(8.0);
+                ui.horizontal_wrapped(|ui| {
+                    if icons::button(ui, Icon::Copy, "Copy report", None).clicked() {
+                        ui.ctx().copy_text(
+                            self.diagnostics
+                                .report(env!("CARGO_PKG_VERSION"), std::env::consts::OS),
+                        );
+                        self.notice = Some(("Sanitized diagnostic report copied.".into(), false));
+                    }
+                    if icons::button(ui, Icon::FolderOpen, "Export report", None).clicked() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_title("Export SoftClone diagnostics")
+                            .set_file_name("softclone-diagnostics.txt")
+                            .add_filter("Text", &["txt"])
+                            .save_file()
+                        {
+                            let report = self
+                                .diagnostics
+                                .report(env!("CARGO_PKG_VERSION"), std::env::consts::OS);
+                            match std::fs::write(path, report) {
+                                Ok(()) => {
+                                    self.log_event(DiagnosticEvent::LogsExported);
+                                    self.notice = Some(("Sanitized diagnostic report exported.".into(), false));
+                                }
+                                Err(error) => self.notice = Some((format!("Export failed: {error}"), true)),
+                            }
+                        }
+                    }
+                    if icons::button(ui, Icon::CircleAlert, "Clear logs", None).clicked() {
+                        self.confirm_clear_logs = true;
+                    }
+                });
+                ui.add_space(8.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.selectable_value(&mut self.log_filter, LogFilter::All, "All");
+                    ui.selectable_value(&mut self.log_filter, LogFilter::Info, "Info");
+                    ui.selectable_value(&mut self.log_filter, LogFilter::Warning, "Warnings");
+                    ui.selectable_value(&mut self.log_filter, LogFilter::Error, "Errors");
+                });
+                ui.add_sized(
+                    [ui.available_width().min(520.0), 34.0],
+                    egui::TextEdit::singleline(&mut self.log_search)
+                        .hint_text("Filter event type, category or message"),
+                );
+            });
+        ui.add_space(14.0);
+        let search = self.log_search.trim().to_ascii_lowercase();
+        let mut shown = 0;
+        for entry in self.diagnostics.entries().iter().rev() {
+            if !self.log_filter.matches(entry) {
+                continue;
+            }
+            if !search.is_empty()
+                && !entry.event.category().to_ascii_lowercase().contains(&search)
+                && !entry.event.message().to_ascii_lowercase().contains(&search)
+                && !entry.level().label().to_ascii_lowercase().contains(&search)
+            {
+                continue;
+            }
+            shown += 1;
+            Frame::new()
+                .fill(WHITE)
+                .stroke(Stroke::new(1.0_f32, LINE))
+                .corner_radius(8)
+                .inner_margin(12)
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        let level_color = match entry.level() {
+                            LogLevel::Info => ACCENT,
+                            LogLevel::Warning => Color32::from_rgb(157, 115, 47),
+                            LogLevel::Error => Color32::from_rgb(170, 63, 53),
+                        };
+                        ui.label(
+                            RichText::new(entry.level().label())
+                                .color(level_color)
+                                .strong()
+                                .size(11.0),
+                        );
+                        ui.label(
+                            RichText::new(format!("{} · {}", entry.timestamp_secs, entry.event.category()))
+                                .color(MUTED)
+                                .size(11.0),
+                        );
+                        ui.label(RichText::new(entry.event.message()).color(INK).size(12.5));
+                    });
+                });
+            ui.add_space(6.0);
+        }
+        if shown == 0 {
+            crate::components::fields::helper(
+                ui,
+                "No diagnostic events match the current filter.",
+            );
+        }
+        ui.add_space(12.0);
+        crate::components::fields::helper(
+            ui,
+            "Timestamps are Unix seconds (UTC). This is SoftClone's operational event history, not a complete OS process trace or crash dump. Logs are never uploaded automatically.",
+        );
+    }
+
+    fn clear_logs_dialog(&mut self, ctx: &egui::Context) {
+        if !self.confirm_clear_logs {
+            return;
+        }
+        let mut close = false;
+        let mut clear = false;
+        egui::Window::new("Clear diagnostic history?")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .default_width(370.0)
+            .show(ctx, |ui| {
+                ui.label("This removes the saved current and rotated SoftClone diagnostic logs.");
+                ui.label("Managed instances and application profiles will not be touched.");
+                ui.horizontal(|ui| {
+                    if ui.button("Cancel").clicked() {
+                        close = true;
+                    }
+                    if ui.button("Clear logs permanently").clicked() {
+                        clear = true;
+                    }
+                });
+            });
+        if clear {
+            match self.diagnostics.clear() {
+                Ok(()) => self.notice = Some(("Diagnostic history cleared.".into(), false)),
+                Err(error) => self.notice = Some((format!("Could not clear all logs: {error}"), true)),
+            }
+            close = true;
+        }
+        if close {
+            self.confirm_clear_logs = false;
         }
     }
 }
@@ -1359,12 +1643,15 @@ impl eframe::App for DesktopApp {
                         Page::Library => self.library(ui),
                         Page::Create => self.create(ui),
                         Page::Discover => self.discover(ui),
+                        Page::Diagnostics => self.diagnostics(ui),
+                        Page::Guide => self.how_it_works(ui),
                         Page::About => self.about(ui),
                     }
                     ui.add_space(36.0);
                 });
             });
         self.manager_dialog(ctx);
+        self.clear_logs_dialog(ctx);
     }
 }
 

@@ -18,6 +18,8 @@ pub enum Icon {
     Package,
     CheckCircle,
     CircleAlert,
+    Activity,
+    Heart,
 }
 
 pub fn inline(ui: &mut Ui, icon: Icon, size: f32, color: Color32) -> Response {
@@ -216,6 +218,12 @@ pub fn draw(painter: &egui::Painter, icon: Icon, center: Pos2, size: f32, color:
             circle(12.0, 12.0, 9.0);
             line(&[(12.0, 7.0), (12.0, 13.0)]);
             painter.circle_filled(at(12.0, 17.0), 1.1 * scale, color);
+        }
+        Icon::Activity => {
+            line(&[(2.0, 12.0), (6.0, 12.0), (9.0, 5.0), (13.0, 20.0), (16.0, 10.0), (19.0, 12.0), (22.0, 12.0)]);
+        }
+        Icon::Heart => {
+            line(&[(12.0, 21.0), (3.0, 12.0), (3.0, 7.0), (6.0, 4.0), (9.0, 4.0), (12.0, 7.0), (15.0, 4.0), (18.0, 4.0), (21.0, 7.0), (21.0, 12.0), (12.0, 21.0)]);
         }
     }
 }
