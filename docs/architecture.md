@@ -76,3 +76,11 @@ The UI maintains a map of child process handles launched by SoftClone in the cur
 Backups are plain local folders and can include cookies, credentials, private browser profiles and application data. They are not encrypted or compressed. Long-running operations run on a worker thread; the UI shows busy state and explicit destructive confirmations. Tracked running processes block duplicate/backup/restore/delete, but external processes cannot reliably be detected. Instance backups are retained after deleting an instance.
 
 Known gaps: encrypted backup export, OS process-tree tracking, source filesystem snapshots, accurate external process tracking, and native installers are not included. When cleanup fails after a registry update, SoftClone reports the staged recovery path.
+
+## Zoom multi-instance compatibility (v0.5.1)
+
+`universal::adapter_for` recognizes exactly Windows `Zoom.exe` as a Zoom-specific adapter; helpers/updaters are excluded. `adapter_args_for_instance` accepts the already persisted instance UUID and produces `--multipt=TRUE` and `--data=data<uuid-simple>`, per Zoom's Windows developer documentation. This makes the selector unique across separate clone records and stable across SoftClone restarts, including older profile records. Existing browser adapter behavior remains unchanged.
+
+Zoom on Windows keeps normal OS APPDATA and LOCALAPPDATA while providing a separate Zoom data selector, avoiding env-only isolation that did not guarantee multiple instances. Launch feedback distinguishes a process spawn request from confirmed independent GUI windows. The UI labels unsupported profile adapters as experimental. Official docs: https://developers.zoom.us/docs/zoom-apps/guides/testing/.
+
+No Zoom executable, install registry entry, account session, license or vendor config is modified by the adapter. This feature is not a generic multi-instance bypass; Zoom's command line options are vendor-documented. Windows-only automatic behavior. Runtime verification on a user-owned Windows device remains necessary.

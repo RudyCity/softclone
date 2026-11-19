@@ -109,3 +109,13 @@ The My clones workspace supports these explicit managed-instance actions:
 **Safety boundaries:** Stop/Restart works only for directly tracked processes in the current session. If an app starts child processes or outlives a launcher, those may not be tracked. Close any externally launched app before duplicating, backing up, restoring or deleting. No feature bypasses licensing, DRM, services or OS sandboxing.
 
 The Rust lifecycle API is in `src/instance_manager.rs`, with tests for backup/restore, duplication, rename, deletion and path protections.
+
+## Zoom Workplace: two Windows desktop instances (v0.5.1)
+
+SoftClone now supports Zoom's official Windows multi-instance launch options for `Zoom.exe`. Each managed instance launches with `--multipt=TRUE` and a stable, distinct `--data=data<instance UUID>` selector. This is Zoom's published method for testing multiple simultaneous instances on one Windows computer; see [Zoom's official developer guide](https://developers.zoom.us/docs/zoom-apps/guides/testing/#running-multiple-instances-of-zoom-on-one-computer).
+
+**Existing SoftClone Zoom profiles do not need to be recreated.** The app uses the UUID already stored in each clone record. When using Zoom Workplace, select the actual `Zoom.exe` executable and choose **Use installed application with a separate profile**. The original installed Zoom files are not altered. The Zoom adapter preserves ordinary Windows APPDATA/LOCALAPPDATA rather than redirecting those environment variables, which can interfere with installed Zoom helpers. The official per-instance `--data` selector is used instead.
+
+To test two windows: quit all previous Zoom instances (including the system tray), start profile 1 and profile 2 from SoftClone, and sign in with the appropriate Zoom accounts. The result depends on the installed Zoom client, its policies, available resources and account restrictions. The launch feedback reports a requested launch; only an on-device test can verify that two separate GUI windows appear. Zoom account switching within one window is a separate Zoom feature.
+
+**OS support:** this adapter is Windows-only. macOS multi-instance setup follows different Zoom documentation, requiring a separately installed/renamed `.app` bundle; Linux has no equivalent adapter here. Other software that ignores profile arguments is still not guaranteed to run concurrently.
