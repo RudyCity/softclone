@@ -56,12 +56,14 @@ enum CloneEvent {
 #[derive(Clone)]
 enum PendingManager {
     Rename(Uuid),
+    Duplicate(Uuid),
     Restore(Uuid),
     Delete(Uuid),
 }
 
 enum ManagerWork {
     Rename(String),
+    Duplicate(String),
     Backup,
     Restore(Uuid),
     Delete,
@@ -696,6 +698,7 @@ impl DesktopApp {
         }
         let label = match &work {
             ManagerWork::Rename(_) => "Renaming",
+            ManagerWork::Duplicate(_) => "Duplicating",
             ManagerWork::Backup => "Backing up",
             ManagerWork::Restore(_) => "Restoring snapshot",
             ManagerWork::Delete => "Deleting instance",
@@ -710,6 +713,10 @@ impl DesktopApp {
             let result = match work {
                 ManagerWork::Rename(name) => instance_manager::rename(&record, &name, &database)
                     .map(|()| format!("Renamed instance to {name}.")),
+                ManagerWork::Duplicate(name) => instance_manager::duplicate(
+                    &record, &name, &library, &database,
+                )
+                .map(|duplicate| format!("Duplicated {} as {}.", record.name, duplicate.name)),
                 ManagerWork::Backup => {
                     instance_manager::backup(&record, &library, &backups, &database).map(|info| {
                         format!(
@@ -784,6 +791,14 @@ impl DesktopApp {
                 self.manager_name = record.name.clone();
                 self.pending_manager = Some(PendingManager::Rename(record.id));
             }
+            InstanceAction::Duplicate => {
+                if self.processes.contains_key(&record.id) {
+                    self.notice = Some(("Stop this instance before duplicating it.".into(), true));
+                    return;
+                }
+                self.manager_name = format!("{} copy", record.name);
+                self.pending_manager = Some(PendingManager::Duplicate(record.id));
+            }
             InstanceAction::Backup => self.start_manager_work(record.clone(), ManagerWork::Backup),
             InstanceAction::Restore => {
                 if self.processes.contains_key(&record.id) {
@@ -827,6 +842,7 @@ impl DesktopApp {
         };
         let id = match &pending {
             PendingManager::Rename(id)
+            | PendingManager::Duplicate(id)
             | PendingManager::Restore(id)
             | PendingManager::Delete(id) => *id,
         };
@@ -836,6 +852,7 @@ impl DesktopApp {
         };
         let title = match pending {
             PendingManager::Rename(_) => "Rename instance",
+            PendingManager::Duplicate(_) => "Duplicate instance",
             PendingManager::Restore(_) => "Restore snapshot",
             PendingManager::Delete(_) => "Delete instance",
         };
@@ -855,6 +872,15 @@ impl DesktopApp {
                         let valid = core::validate_name(&self.manager_name).is_ok();
                         if ui.add_enabled(valid, egui::Button::new("Save name")).clicked() {
                             execute = Some(ManagerWork::Rename(self.manager_name.clone()));
+                        }
+                    }
+                    PendingManager::Duplicate(_) => {
+                        ui.label("Create a separate managed folder and profile from this instance.");
+                        ui.label("The original vendor installation is not modified.");
+                        ui.text_edit_singleline(&mut self.manager_name);
+                        let valid = core::validate_name(&self.manager_name).is_ok();
+                        if ui.add_enabled(valid, egui::Button::new("Duplicate instance")).clicked() {
+                            execute = Some(ManagerWork::Duplicate(self.manager_name.clone()));
                         }
                     }
                     PendingManager::Restore(_) => {
