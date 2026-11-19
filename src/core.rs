@@ -135,7 +135,7 @@ pub fn prepare(request: &CloneRequest) -> Result<Prepared> {
         if !request.entrypoint.trim().is_empty() {
             return Err(CloneError::Invalid("A macOS app bundle needs no entrypoint.".into()));
         }
-        PathBuf::from(".")
+        PathBuf::from(source.file_name().ok_or_else(|| CloneError::Invalid("Missing app bundle name".into()))?)
     } else {
         let entry = if request.entrypoint.trim().is_empty() { auto_entry(&source)? }
             else { safe_relative(request.entrypoint.trim())? };
@@ -189,7 +189,10 @@ pub fn create_clone(prepared: &Prepared, library_dir: &Path) -> Result<CloneReco
     let outcome = (|| -> Result<u64> {
         let payload = staging.join("payload");
         fs::create_dir(&payload)?;
-        let bytes = if prepared.source.is_dir() {
+        let bytes = if is_app_bundle(&prepared.source) {
+            let bundle = prepared.source.file_name().ok_or_else(|| CloneError::Invalid("Missing app bundle name".into()))?;
+            checked_copy_dir(&prepared.source, &payload.join(bundle))?
+        } else if prepared.source.is_dir() {
             checked_copy_dir(&prepared.source, &payload)?
         } else {
             let name = prepared.source.file_name().ok_or_else(|| CloneError::Invalid("Invalid filename".into()))?;
