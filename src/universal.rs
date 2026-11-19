@@ -199,7 +199,7 @@ pub fn first_exec_token(exec_line: &str) -> Option<String> {
         }
     }
     let executable = tokens.get(offset)?;
-    if executable.chars().any(|c| matches!(c, '
+    if executable.chars().any(|c| matches!(c, '$' | ';' | '|' | '&' | '<' | '>' | '%' | '\n' | '\r'))
         || ["sh", "bash", "zsh", "flatpak", "snap", "pkexec", "sudo"]
             .contains(&executable.as_str())
     { return None; }
