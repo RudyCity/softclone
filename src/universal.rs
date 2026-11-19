@@ -1,8 +1,10 @@
 //! User-space app discovery and known profile adapters.
 //! Discovery is read-only. A discovered app is never launched automatically.
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+use std::env;
 use std::{
     collections::HashSet,
-    env, fs,
+    fs,
     ffi::OsString,
     path::{Path, PathBuf},
 };
