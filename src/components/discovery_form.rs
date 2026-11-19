@@ -1,7 +1,8 @@
 //! Installed-app search and scan controls.
 use super::fields;
 use crate::icons::{self, Icon};
-use eframe::egui::{self, Color32, Frame, RichText, Ui};
+use eframe::egui::{self, Align, Color32, Frame, Label, Layout, RichText, Ui};
+use softclone::universal::{DiscoveredApp, Support};
 
 pub struct DiscoveryToolbar<'a> {
     pub query: &'a mut String,
@@ -23,7 +24,8 @@ impl DiscoveryToolbar<'_> {
             .corner_radius(12)
             .inner_margin(egui::Margin::same(16))
             .show(ui, |ui| {
-                ui.set_width(ui.available_width());
+                let panel_width = ui.available_width();
+                ui.set_width(panel_width);
                 ui.label(
                     RichText::new("FIND AN APPLICATION")
                         .color(fields::ACCENT)
@@ -94,4 +96,82 @@ pub fn compatibility_note(ui: &mut Ui) {
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     let message = "Local discovery is best effort and does not launch applications.";
     fields::helper(ui, message);
+}
+
+
+fn app_details(ui: &mut Ui, app: &DiscoveredApp) {
+    ui.add(
+        Label::new(
+            RichText::new(&app.name)
+                .size(15.0)
+                .strong()
+                .color(fields::INK),
+        )
+        .wrap(),
+    );
+    ui.horizontal(|ui| {
+        let icon = match app.support {
+            Support::ProfileAdapter => Icon::UserRoundCheck,
+            Support::CopyCandidate => Icon::Package,
+            Support::ReviewRequired => Icon::AlertTriangle,
+        };
+        icons::inline(ui, icon, 16.0, fields::ACCENT);
+        ui.label(
+            RichText::new(app.support.label())
+                .size(12.0)
+                .color(fields::ACCENT),
+        );
+    });
+    fields::helper(ui, app.origin);
+    fields::helper(ui, &app.note);
+    if !app.path.as_os_str().is_empty() {
+        ui.add(
+            Label::new(
+                RichText::new(app.path.display().to_string())
+                    .size(11.0)
+                    .color(fields::MUTED),
+            )
+            .wrap(),
+        );
+    }
+}
+
+fn choose_button(ui: &mut Ui, app: &DiscoveredApp) -> bool {
+    ui.add_enabled(app.launchable, egui::Button::new("Use this app"))
+        .on_disabled_hover_text(
+            "No safe executable was resolved. Select a path manually in Create clone.",
+        )
+        .clicked()
+}
+
+pub fn app_card(ui: &mut Ui, app: &DiscoveredApp) -> bool {
+    Frame::new()
+        .fill(Color32::WHITE)
+        .stroke(egui::Stroke::new(1.0_f32, fields::BORDER))
+        .corner_radius(12)
+        .inner_margin(egui::Margin::same(17))
+        .show(ui, |ui| {
+            let width = ui.available_width();
+            if width >= 560.0 {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.set_max_width((width - 155.0).max(220.0));
+                        app_details(ui, app);
+                    });
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        choose_button(ui, app)
+                    })
+                    .inner
+                })
+                .inner
+            } else {
+                ui.vertical(|ui| {
+                    app_details(ui, app);
+                    ui.add_space(8.0);
+                    choose_button(ui, app)
+                })
+                .inner
+            }
+        })
+        .inner
 }
