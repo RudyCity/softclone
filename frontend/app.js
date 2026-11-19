@@ -5,7 +5,7 @@ const $$=(q)=>[...document.querySelectorAll(q)];
 const e=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const bytes=(v)=>{let n=Number(v)||0,i=0;const u=["B","KB","MB","GB","TB"];while(n>=1024&&i<4){n/=1024;i++}return (i?n.toFixed(1):n.toFixed(0))+" "+u[i]};
 const date=(v)=>new Date(Number(v)*1000).toLocaleString();
-const S={page:"library",clones:[],apps:[],logs:[],logErr:null,query:"",filter:"all",busy:false,creating:false,progress:null,scan:false,scanned:false,modal:null,preflight:null,info:{version:"0.6.1",os:"desktop",license:"Apache-2.0",runtime:"Tauri 2"},form:{source:"",name:"",entrypoint:"",isolatedProfile:true,profileOnly:false}};
+const S={page:"library",clones:[],apps:[],logs:[],logErr:null,query:"",filter:"all",busy:false,creating:false,progress:null,scan:false,scanned:false,modal:null,preflight:null,info:{version:"0.6.2",os:"desktop",license:"Apache-2.0",runtime:"Tauri 2"},form:{source:"",name:"",entrypoint:"",isolatedProfile:true,profileOnly:false}};
 const btn=(label,action,klass="secondary",attrs="")=>'<button class="btn btn-'+klass+'" type="button" data-action="'+action+'" '+attrs+' '+(S.busy?"disabled":"")+'>'+label+'</button>';
 const header=(tag,title,desc,actions="")=>'<div class="page-heading"><div><p class="eyebrow">'+e(tag)+'</p><h1>'+e(title)+'</h1><p class="page-lead">'+e(desc)+'</p></div>'+actions+'</div>';
 const empty=(name,desc,action="")=>'<div class="empty"><div class="empty-emblem">□</div><h3>'+e(name)+'</h3><p>'+e(desc)+'</p>'+action+'</div>';

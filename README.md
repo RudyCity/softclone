@@ -44,10 +44,14 @@ npm run build
 
 Only directly tracked process handles can be stopped. The app does not elevate privileges or terminate arbitrary PIDs.
 
+## No terminal popup while scanning on Windows
+
+Windows Store/MSIX discovery runs the internal PowerShell inventory tool with the `CREATE_NO_WINDOW` Windows process creation flag, hidden window style, and noninteractive arguments. The scanner operates in the background without opening Windows Terminal. Tauri itself uses the Windows GUI subsystem in both development and release builds.
+
 ## Boundaries and privacy
 
 SoftClone **does not** bypass activation, software licenses, DRM, signatures, platform sandbox rules, app services or installation systems. Portable file copying is not universal application virtualization. Browser-specific profile flags, Windows Zoom multi-instance arguments and environment-based profile paths are best effort and do not guarantee true isolation or distinct GUI windows. Windows Store/MSIX packages can be opened, **not cloned**; vendor rules continue to apply.
 
 All clone files and diagnostic logs stay on the local device. Backups may contain private application data and are not encrypted. There is no background telemetry. Third-party software retains its own license.
 
-See [architecture](docs/architecture.md), [design system](docs/design-system.md) and [Tauri migration notes](docs/releases/v0.6.1.md).
+See [architecture](docs/architecture.md), [design system](docs/design-system.md) and [Tauri migration notes](docs/releases/v0.6.2.md).

@@ -3,7 +3,16 @@
 //! Unlike Win32 software, these apps cannot be cloned by copying an .exe.
 use crate::universal::{DiscoveredApp, Support};
 use serde::Deserialize;
-use std::{path::PathBuf, process::Command};
+use std::{
+    os::windows::process::CommandExt,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
+
+// CREATE_NO_WINDOW prevents PowerShell from opening a conhost/Windows Terminal
+// window while Store/MSIX inventory runs in the background.
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 
 /// AUMIDs must be one package-family identifier plus one application ID.
 /// Keep it safe to append to shell:AppsFolder without passing untrusted syntax.
@@ -103,16 +112,25 @@ fn parse_entries(json: &str) -> Vec<DiscoveredApp> {
     apps
 }
 
+// Console-subsystem PowerShell children must never display Windows Terminal.
+fn hidden_powershell(script: &str) -> Command {
+    let mut command = Command::new("powershell.exe");
+    command.creation_flags(CREATE_NO_WINDOW);
+    command.stdin(Stdio::null());
+    command.args([
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-Command",
+        script,
+    ]);
+    command
+}
+
 pub fn discover_apps() -> Vec<DiscoveredApp> {
-    let result = Command::new("powershell.exe")
-        .args([
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            STORE_SCRIPT,
-        ])
-        .output();
+    let result = hidden_powershell(STORE_SCRIPT).output();
     match result {
         Ok(output) if output.status.success() && output.stdout.len() <= 2_000_000 => {
             parse_entries(&String::from_utf8_lossy(&output.stdout))
@@ -136,6 +154,18 @@ pub fn open_app(aumid: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hidden_powershell_captures_inventory_output() {
+        let output = hidden_powershell("Write-Output 'softclone-store-discovery-probe'")
+            .output()
+            .expect("Windows PowerShell should be available");
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "softclone-store-discovery-probe"
+        );
+    }
 
     #[test]
     fn only_valid_app_user_model_ids_accepted() {

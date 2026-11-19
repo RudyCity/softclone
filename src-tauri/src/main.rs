@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 //! Tauri 2 desktop host. The existing Rust library remains the sole owner of clone files,
 //! registry validation, supported app discovery and launch policy.
 use serde::{Deserialize, Serialize};

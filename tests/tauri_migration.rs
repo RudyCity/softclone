@@ -31,3 +31,14 @@ fn migration_has_native_tauri_shell_and_no_egui_dependency() {
         );
     }
 }
+
+#[cfg(target_os = "windows")]
+#[test]
+fn windows_discovery_does_not_spawn_visible_terminal() {
+    let store = include_str!("../src/windows_store.rs");
+    let host = include_str!("../src-tauri/src/main.rs");
+    assert!(store.contains("creation_flags(CREATE_NO_WINDOW)"));
+    assert!(store.contains("Stdio::null()"));
+    assert!(store.contains("\"-WindowStyle\""));
+    assert!(host.contains("cfg_attr(target_os = \"windows\", windows_subsystem = \"windows\")"));
+}
