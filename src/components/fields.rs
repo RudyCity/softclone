@@ -36,7 +36,9 @@ pub fn text_field(
     help_text: Option<&str>,
     value: &mut String,
 ) -> Response {
-    ui.label(RichText::new(label).color(INK).size(14.0).strong());
+    if !label.is_empty() {
+        ui.label(RichText::new(label).color(INK).size(14.0).strong());
+    }
     let width = ui.available_width().min(720.0).max(80.0);
     let response = ui.add_sized(
         Vec2::new(width, 38.0),

@@ -22,7 +22,7 @@ pub struct CreateFormAction {
 }
 
 impl CreateForm<'_> {
-    pub fn show(self, ui: &mut Ui) -> CreateFormAction {
+    pub fn show(mut self, ui: &mut Ui) -> CreateFormAction {
         Frame::new()
             .fill(Color32::WHITE)
             .stroke(egui::Stroke::new(1.0_f32, fields::BORDER))
@@ -43,7 +43,7 @@ impl CreateForm<'_> {
             .inner
     }
 
-    fn source_section(&self, ui: &mut Ui) {
+    fn source_section(&mut self, ui: &mut Ui) {
         fields::section(ui, "01", "SOURCE APPLICATION");
         fields::text_field(
             ui,
@@ -54,11 +54,9 @@ impl CreateForm<'_> {
         );
     }
 
-    fn details_section(&self, ui: &mut Ui) -> Option<String> {
+    fn details_section(&mut self, ui: &mut Ui) -> Option<String> {
         fields::section(ui, "02", "INSTANCE DETAILS");
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Clone name").size(14.0).color(fields::INK).strong());
-        });
+        ui.label(RichText::new("Clone name").size(14.0).color(fields::INK).strong());
         let mut error = None;
         if ui.button("Suggest with Rune").clicked() {
             let path = Path::new(self.source.trim());
@@ -85,7 +83,7 @@ impl CreateForm<'_> {
         error
     }
 
-    fn strategy_section(&self, ui: &mut Ui) {
+    fn strategy_section(&mut self, ui: &mut Ui) {
         fields::section(ui, "03", "INSTANCE STRATEGY");
         ui.radio_value(
             self.profile_only,
