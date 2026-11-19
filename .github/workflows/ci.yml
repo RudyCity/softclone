@@ -57,6 +57,9 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Check Tauri formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - name: Windows regression — no console during Store discovery
+        if: runner.os == 'Windows'
+        run: cargo test --all-targets
       - name: Check desktop host
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Build native installer packages
