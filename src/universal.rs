@@ -91,7 +91,11 @@ pub enum Adapter {
 pub fn adapter_for(path: &Path) -> Option<Adapter> {
     let name = path.file_stem()?.to_string_lossy().to_lowercase();
     #[cfg(target_os = "windows")]
-    if name == "zoom" && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
+    if name == "zoom"
+        && path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+    {
         return Some(Adapter::ZoomWindows);
     }
     let chromium = [
@@ -501,8 +505,14 @@ mod tests {
         assert_eq!(adapter_for(Path::new("ZoomUpdater.exe")), None);
         #[cfg(target_os = "windows")]
         {
-            assert_eq!(adapter_for(Path::new(r"C:\Program Files\Zoom\bin\Zoom.exe")), Some(Adapter::ZoomWindows));
-            assert_eq!(adapter_for(Path::new(r"C:\Zoom\zoom.EXE")), Some(Adapter::ZoomWindows));
+            assert_eq!(
+                adapter_for(Path::new(r"C:\Program Files\Zoom\bin\Zoom.exe")),
+                Some(Adapter::ZoomWindows)
+            );
+            assert_eq!(
+                adapter_for(Path::new(r"C:\Zoom\zoom.EXE")),
+                Some(Adapter::ZoomWindows)
+            );
             let first = uuid::Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap();
             let second = uuid::Uuid::parse_str("22222222-2222-4222-8222-222222222222").unwrap();
             let profile = Path::new(r"C:\softclone\profile-1\profile");
@@ -512,7 +522,10 @@ mod tests {
             assert_eq!(b[0], "--multipt=TRUE");
             assert!(a[1].to_string_lossy().starts_with("--data=data"));
             assert_ne!(a[1], b[1]);
-            assert_eq!(a, adapter_args_for_instance(Path::new("Zoom.exe"), profile, first));
+            assert_eq!(
+                a,
+                adapter_args_for_instance(Path::new("Zoom.exe"), profile, first)
+            );
         }
         #[cfg(not(target_os = "windows"))]
         assert_eq!(adapter_for(Path::new("/Applications/Zoom.app")), None);

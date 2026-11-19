@@ -678,7 +678,9 @@ impl DesktopApp {
                 } else {
                     &record.entrypoint
                 };
-                let detail = if universal::adapter_for(target) == Some(universal::Adapter::ZoomWindows) {
+                let detail = if universal::adapter_for(target)
+                    == Some(universal::Adapter::ZoomWindows)
+                {
                     " Zoom multi-instance mode requested with a unique data selector; verify that a second window appeared."
                 } else if record.run_mode == core::RunMode::ProfileOnly
                     && universal::adapter_for(target).is_none()
@@ -688,7 +690,10 @@ impl DesktopApp {
                     ""
                 };
                 self.notice = Some((
-                    format!("Launch requested for {} (tracked PID {pid}).{detail}", record.name),
+                    format!(
+                        "Launch requested for {} (tracked PID {pid}).{detail}",
+                        record.name
+                    ),
                     false,
                 ));
             }
