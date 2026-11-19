@@ -98,6 +98,24 @@ pub fn compatibility_note(ui: &mut Ui) {
     fields::helper(ui, message);
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppCardAction {
+    UseApp,
+    LocateExecutable,
+}
+
+fn is_host_component(app: &DiscoveredApp) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        softclone::windows_installed::is_known_component(&app.name)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        false
+    }
+}
+
 fn app_details(ui: &mut Ui, app: &DiscoveredApp) {
     ui.add(
         Label::new(
@@ -115,11 +133,12 @@ fn app_details(ui: &mut Ui, app: &DiscoveredApp) {
             Support::ReviewRequired => Icon::AlertTriangle,
         };
         icons::inline(ui, icon, 16.0, fields::ACCENT);
-        ui.label(
-            RichText::new(app.support.label())
-                .size(12.0)
-                .color(fields::ACCENT),
-        );
+        let status = if is_host_component(app) {
+            "OBS plug-in · not a standalone app"
+        } else {
+            app.support.label()
+        };
+        ui.label(RichText::new(status).size(12.0).color(fields::ACCENT));
     });
     if app.publisher.is_some() || app.version.is_some() {
         let publisher = app.publisher.as_deref().unwrap_or("Unknown publisher");
@@ -147,12 +166,22 @@ fn app_details(ui: &mut Ui, app: &DiscoveredApp) {
     }
 }
 
-fn choose_button(ui: &mut Ui, app: &DiscoveredApp) -> bool {
-    ui.add_enabled(app.launchable, egui::Button::new("Use this app"))
-        .on_disabled_hover_text(
-            "No safe executable was resolved. Select a path manually in Create clone.",
-        )
-        .clicked()
+fn choose_button(ui: &mut Ui, app: &DiscoveredApp) -> Option<AppCardAction> {
+    if is_host_component(app) {
+        return None;
+    }
+    if app.launchable {
+        ui.button("Use this app")
+            .clicked()
+            .then_some(AppCardAction::UseApp)
+    } else {
+        // Do not silently choose a random .exe. Give the user an explicit
+        // native file selection path instead of a permanently disabled card.
+        ui.button("Locate executable…")
+            .on_hover_text("Choose the actual application's executable; updater and installers are not suitable.")
+            .clicked()
+            .then_some(AppCardAction::LocateExecutable)
+    }
 }
 
 fn app_avatar(ui: &mut Ui, texture: Option<&egui::TextureHandle>) {
@@ -168,7 +197,7 @@ fn app_avatar(ui: &mut Ui, texture: Option<&egui::TextureHandle>) {
             }
         });
 }
-pub fn app_card(ui: &mut Ui, app: &DiscoveredApp, texture: Option<&egui::TextureHandle>) -> bool {
+pub fn app_card(ui: &mut Ui, app: &DiscoveredApp, texture: Option<&egui::TextureHandle>) -> Option<AppCardAction> {
     Frame::new()
         .fill(Color32::WHITE)
         .stroke(egui::Stroke::new(1.0_f32, fields::BORDER))
