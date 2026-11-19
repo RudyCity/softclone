@@ -16,6 +16,9 @@ pub fn library_dir() -> PathBuf {
 pub fn registry_file() -> PathBuf {
     app_data_dir().join("instances.json")
 }
+pub fn backups_dir() -> PathBuf {
+    app_data_dir().join("backups")
+}
 
 pub fn load(path: &Path) -> io::Result<Vec<CloneRecord>> {
     if !path.exists() {

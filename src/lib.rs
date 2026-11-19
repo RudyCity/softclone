@@ -5,3 +5,4 @@ pub mod rune_engine;
 pub mod universal;
 #[cfg(target_os = "windows")]
 pub mod windows_installed;
+pub mod instance_manager;
