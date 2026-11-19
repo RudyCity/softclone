@@ -343,7 +343,9 @@ pub fn create_profile_instance(prepared: &Prepared, library_dir: &Path) -> Resul
     let root = library.join(format!("profile-{id}"));
     fs::create_dir(&root)?;
     let result = (|| -> Result<()> {
-        for sub in ["config", "data", "cache", "roaming", "local", "browser", "firefox"] {
+        for sub in [
+            "config", "data", "cache", "roaming", "local", "browser", "firefox",
+        ] {
             fs::create_dir_all(root.join("profile").join(sub))?;
         }
         Ok(())
@@ -385,17 +387,17 @@ pub fn launch(record: &CloneRecord) -> Result<Child> {
         RunMode::ProfileOnly => {
             let source = fs::canonicalize(&record.source)?;
             if !source.is_file() && !source.is_dir() {
-                return Err(CloneError::Invalid("Original app is no longer available.".into()));
+                return Err(CloneError::Invalid(
+                    "Original app is no longer available.".into(),
+                ));
             }
             let (target, directory) = if source.is_dir() {
                 let target = if is_app_bundle(&source) {
                     source.clone()
                 } else {
-                    let relative = safe_relative(
-                        record.entrypoint.to_str().ok_or_else(|| {
-                            CloneError::Invalid("Entrypoint contains invalid characters.".into())
-                        })?,
-                    )?;
+                    let relative = safe_relative(record.entrypoint.to_str().ok_or_else(|| {
+                        CloneError::Invalid("Entrypoint contains invalid characters.".into())
+                    })?)?;
                     fs::canonicalize(source.join(relative))?
                 };
                 if !target.starts_with(&source) {
@@ -405,7 +407,8 @@ pub fn launch(record: &CloneRecord) -> Result<Child> {
                 }
                 (target, source)
             } else {
-                let directory = source.parent()
+                let directory = source
+                    .parent()
                     .ok_or_else(|| CloneError::Invalid("Executable has no parent.".into()))?
                     .to_path_buf();
                 (source, directory)
@@ -421,7 +424,9 @@ pub fn launch(record: &CloneRecord) -> Result<Child> {
 
     let profile = record.root.join("profile");
     let arguments = if record.isolated_profile {
-        for sub in ["config", "data", "cache", "roaming", "local", "browser", "firefox"] {
+        for sub in [
+            "config", "data", "cache", "roaming", "local", "browser", "firefox",
+        ] {
             fs::create_dir_all(profile.join(sub))?;
         }
         crate::universal::adapter_args(&target, &profile)
