@@ -84,3 +84,13 @@ Known gaps: encrypted backup export, OS process-tree tracking, source filesystem
 Zoom on Windows keeps normal OS APPDATA and LOCALAPPDATA while providing a separate Zoom data selector, avoiding env-only isolation that did not guarantee multiple instances. Launch feedback distinguishes a process spawn request from confirmed independent GUI windows. The UI labels unsupported profile adapters as experimental. Official docs: https://developers.zoom.us/docs/zoom-apps/guides/testing/.
 
 No Zoom executable, install registry entry, account session, license or vendor config is modified by the adapter. This feature is not a generic multi-instance bypass; Zoom's command line options are vendor-documented. Windows-only automatic behavior. Runtime verification on a user-owned Windows device remains necessary.
+
+## v0.5.2 packaged application discovery and native activation
+
+On Windows, `windows_store` runs a fixed, non-elevated, read-only PowerShell discovery command in the existing background discovery worker: current-user `Get-AppxPackage`, manifest application IDs from `Get-AppxPackageManifest`, and human-friendly labels from `Get-StartApps`. Records must have valid bounded AUMIDs (`PackageFamilyName!ApplicationId`) before display or activation. No discovered value is interpolated into executable code. The source outputs JSON parsed with `serde_json`; unsupported or malformed entries are ignored. A separate Store entry is preserved even when a Win32 entry shares a product name.
+
+Packaged apps have `store_id`, an intentionally empty executable path, `ReviewRequired` compatibility, and an `Open app` action using `explorer.exe shell:AppsFolder\<AUMID>`. This is ordinary OS activation, not managed cloning or isolation. An app without a registered launcher is not presented as directly launchable. Missing executable filters apply only to Win32 entries without usable targets.
+
+On macOS, `macos_candidate` tags `.app` bundles containing `Contents/_MASReceipt/receipt` as probable Mac App Store distributions; the UI opens these through `open -a` rather than presenting direct clone support. The receipt is a heuristic only and does not bypass purchase validation. Existing bundle enumeration remains read-only.
+
+Known Win32 launcher resolution adds name-specific executable lists and root discovery for Illustrator, Android Studio, CapCut and OBSBOT Center while excluding plugin and updater paths. Unresolved Win32 records instead offer an explicit manual executable file dialog. No arbitrary file is silently selected.

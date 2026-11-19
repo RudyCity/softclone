@@ -31,3 +31,7 @@ The Create clone form adds a fourth group, **Preflight Check**, with an explicit
 ## v0.5.0 Instance Manager actions
 
 Each clone card is a reusable component showing a tracked PID when running, otherwise 'No managed process tracked'. The action row provides Launch/Stop/Restart, Folder, Rename, Duplicate, Backup, Restore, and Delete. Rename and Duplicate validate user-facing names, Restore requires selecting a backup, and Delete requires typing the exact instance name. Heavy folder operations use a worker and display busy status without blocking the UI.
+
+## v0.5.2 native Store inventory
+
+Discover cards distinguish Win32 launchers, AppX/MSIX packages, Mac App Store bundles and OBS plugins. Win32 entries with unresolved executables show a secondary **Locate executable…** picker rather than a disabled action. Package entries show **Open app** with a tooltip explaining that native package launching does not create a separate SoftClone instance. Search supports AUMID, product names, publisher and version; a Store entry is distinct from a same-named Win32 entry.
