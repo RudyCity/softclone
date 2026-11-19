@@ -105,6 +105,10 @@ fn expected_primary_exes(name: &str) -> &'static [&'static str] {
         &["studio64.exe", "studio.exe"]
     } else if name.starts_with("adobe illustrator") {
         &["illustrator.exe"]
+    } else if name == "capcut" || name.starts_with("capcut ") {
+        &["capcut.exe"]
+    } else if name.starts_with("obsbot center") {
+        &["obsbot_main.exe", "obsbot_center.exe"]
     } else {
         &[]
     }
@@ -128,7 +132,17 @@ fn known_install_roots(name: &str) -> Vec<PathBuf> {
                 roots.push(base.join("Android").join("Android Studio"));
             } else if normalized.starts_with("adobe illustrator") {
                 roots.push(base.join("Adobe").join(name));
+            } else if normalized == "capcut" || normalized.starts_with("capcut ") {
+                roots.push(base.join("CapCut").join("Apps"));
+                roots.push(base.join("CapCut"));
+            } else if normalized.starts_with("obsbot center") {
+                roots.push(base.join("OBSBOT Center"));
             }
+        }
+    }
+    if normalized == "capcut" || normalized.starts_with("capcut ") {
+        if let Some(local) = env::var_os("LOCALAPPDATA") {
+            roots.push(PathBuf::from(local).join("CapCut").join("Apps"));
         }
     }
     roots
@@ -297,6 +311,7 @@ fn installed_programs(results: &mut HashMap<String, DiscoveredApp>) {
                         launchable,
                         publisher,
                         version,
+                        store_id: None,
                     },
                 );
             }
@@ -359,6 +374,7 @@ fn known_browser_fallback(results: &mut HashMap<String, DiscoveredApp>) {
                     launchable: true,
                     publisher: None,
                     version: None,
+                    store_id: None,
                 },
             );
         }
@@ -395,6 +411,8 @@ mod tests {
     fn known_program_names_map_to_real_launchers() {
         assert_eq!(expected_primary_exes("Android Studio"), &["studio64.exe", "studio.exe"]);
         assert_eq!(expected_primary_exes("Adobe Illustrator 2026"), &["illustrator.exe"]);
+        assert_eq!(expected_primary_exes("CapCut"), &["capcut.exe"]);
+        assert_eq!(expected_primary_exes("OBSBOT Center version 2.0"), &["obsbot_main.exe", "obsbot_center.exe"]);
         assert!(primary_exe_matches("Android Studio", Path::new("studio64.exe")));
         assert!(!primary_exe_matches("Android Studio", Path::new("uninstall.exe")));
         assert!(!primary_exe_matches("Adobe Illustrator 2026", Path::new("Creative Cloud.exe")));
@@ -440,6 +458,7 @@ mod tests {
             launchable: false,
             publisher: None,
             version: None,
+            store_id: None,
         };
         register(&mut results, missing);
         let main = DiscoveredApp {
@@ -451,6 +470,7 @@ mod tests {
             launchable: true,
             publisher: None,
             version: None,
+            store_id: None,
         };
         register(&mut results, main);
         assert_eq!(results.len(), 1);
