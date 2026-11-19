@@ -7,7 +7,7 @@ use std::{
     collections::VecDeque,
     fs::{self, OpenOptions},
     io::{self, BufRead, BufReader, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
