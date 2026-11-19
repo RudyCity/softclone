@@ -407,7 +407,7 @@ pub fn discover_apps() -> Vec<DiscoveredApp> {
     macos_apps(&mut items, &mut seen);
     #[cfg(target_os = "linux")]
     linux_apps(&mut items, &mut seen);
-    items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    items.sort_by_key(|item| item.name.to_lowercase());
     items
 }
 
