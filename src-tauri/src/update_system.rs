@@ -154,7 +154,10 @@ fn valid_asset(asset: &ReleaseAsset, version: &Version) -> bool {
 }
 
 fn release_asset<'a>(release: &'a Release, version: &Version) -> Option<&'a ReleaseAsset> {
-    release.assets.iter().find(|asset| valid_asset(asset, version))
+    release
+        .assets
+        .iter()
+        .find(|asset| valid_asset(asset, version))
 }
 
 fn checked_release() -> DesktopResult<(Release, Version)> {
@@ -177,7 +180,8 @@ fn checksum_from_manifest(text: &str, name: &str) -> DesktopResult<String> {
             }
         })
         .collect();
-    if hashes.len() != 1 || hashes[0].len() != 64
+    if hashes.len() != 1
+        || hashes[0].len() != 64
         || !hashes[0].bytes().all(|byte| byte.is_ascii_hexdigit())
     {
         return Err("Official release checksum is missing or invalid.".into());
@@ -241,7 +245,9 @@ pub async fn check_updates() -> DesktopResult<UpdateCheck> {
 }
 
 #[tauri::command]
-pub fn update_download_progress(state: State<'_, UpdateManager>) -> DesktopResult<Option<UpdateProgress>> {
+pub fn update_download_progress(
+    state: State<'_, UpdateManager>,
+) -> DesktopResult<Option<UpdateProgress>> {
     Ok(guard(&state.state)?.progress.clone())
 }
 
@@ -300,7 +306,9 @@ fn perform_download(
             if total > MAX_ASSET_BYTES || total > asset.size {
                 return Err("Downloaded installer exceeds its declared size.".into());
             }
-            output.write_all(&buffer[..count]).map_err(|error| error.to_string())?;
+            output
+                .write_all(&buffer[..count])
+                .map_err(|error| error.to_string())?;
             hasher.update(&buffer[..count]);
             if let Ok(mut inner) = manager.state.lock() {
                 inner.progress = Some(UpdateProgress {
@@ -374,12 +382,11 @@ pub async fn download_update(state: State<'_, UpdateManager>) -> DesktopResult<V
 pub async fn open_downloaded_update(state: State<'_, UpdateManager>) -> DesktopResult<()> {
     let manager = state.inner().clone();
     blocking(move || {
-        let verified = guard(&manager.state)?
-            .verified
-            .clone()
-            .ok_or_else(|| "Download and verify an update before opening its installer.".to_string())?;
-        let expected_version = Version::parse(&verified.version)
-            .map_err(|error| error.to_string())?;
+        let verified = guard(&manager.state)?.verified.clone().ok_or_else(|| {
+            "Download and verify an update before opening its installer.".to_string()
+        })?;
+        let expected_version =
+            Version::parse(&verified.version).map_err(|error| error.to_string())?;
         if expected_version <= installed_version()? {
             return Err("This update is not newer than the installed version.".into());
         }
@@ -389,7 +396,11 @@ pub async fn open_downloaded_update(state: State<'_, UpdateManager>) -> DesktopR
             return Err("Verified package no longer matches this device.".into());
         }
         let path = PathBuf::from(&verified.path);
-        if path != softclone::registry::app_data_dir().join("updates").join(&expected_name) {
+        if path
+            != softclone::registry::app_data_dir()
+                .join("updates")
+                .join(&expected_name)
+        {
             return Err("Installer is outside SoftClone's managed updates directory.".into());
         }
         if !path.is_file() || path.is_symlink() {
@@ -450,7 +461,10 @@ mod tests {
 
     #[test]
     fn only_stable_semver_tags_accepted() {
-        assert_eq!(parse_release_version("v1.2.3").unwrap().to_string(), "1.2.3");
+        assert_eq!(
+            parse_release_version("v1.2.3").unwrap().to_string(),
+            "1.2.3"
+        );
         assert!(parse_release_version("latest").is_err());
     }
 }
