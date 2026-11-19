@@ -55,3 +55,11 @@ Installed applications without known profile adapters are labeled as requiring m
 Select **Create clone** to choose copying app files versus using an installed app with a dedicated profile. This distinction matters: a profile is not a virtual machine or a security sandbox.
 
 See docs/architecture.md for the current support matrix.
+
+### Installed application discovery and vector icons (0.2.1)
+
+Windows discovery now reads the native **Apps & Features / Installed Programs registry** (HKLM + HKCU, 32-bit and 64-bit views) instead of listing arbitrary executables and folders such as browser version `157.0.*`. It uses the registered `DisplayName`, resolves the real launch executable from `DisplayIcon` or `InstallLocation` when possible, filters system components and updates, and de-duplicates product names. A narrowly scoped executable fallback discovers known browser launchers only.
+
+Registered software without a known safe launch path remains visible but cannot be selected automatically; provide the executable path manually instead. Microsoft Store/MSIX apps are not supported by this reader yet.
+
+The navigation and status UI uses **native egui-painted vector icons**, not Unicode glyphs or system icon fonts. This avoids missing-glyph boxes on Windows, macOS and Linux. See [the release notes](docs/releases/v0.2.1.md).

@@ -34,3 +34,11 @@ Browser adapters: Chromium, Google Chrome, Microsoft Edge, Brave, Vivaldi (user-
 Discovery reads program directories and desktop entry metadata without launching apps. Linux desktop Exec values are parsed as data; wrapper commands and shell constructs are skipped. No app sessions, passwords or browser profiles are imported.
 
 Future OS-assisted isolation would be an explicitly opt-in integration requiring capabilities and permissions from Windows Sandbox/Hyper-V, Linux containers/namespaces or macOS OS sandbox facilities. These are not implemented by the current user-space engine.
+
+## Windows installed programs (v0.2.1)
+
+The Windows discovery source reads native uninstall records from HKLM and HKCU in both 32-bit and 64-bit registry views; uses DisplayName as the user-visible name and avoids version-directory names, update helpers and uninstallers. DisplayIcon and InstallLocation can supply a validated executable candidate. Unresolved records are shown but cannot be selected automatically. Browser executable scanning is only a fallback, with explicit known executable names. Windows Store/MSIX entries are not yet integrated.
+
+All registry operations are read-only, and no installed application's configuration is modified by discovery. Discovery remains background-threaded. Full profile independence is only promised for known compatible adapters.
+
+UI icons are drawn using egui Painter vector strokes, avoiding unsupported Unicode glyph fonts.
