@@ -88,7 +88,7 @@ function modalRender(){
   body='<p>This removes managed files for <strong>'+e(name)+'</strong>, not the original application. Existing backups remain. Type the exact name to confirm.</p><input class="input" id="modal-name" placeholder="'+e(name)+'" value="'+e(m.name)+'">';
  } else if(m.type==="restore"){
   title="Restore backup";
-  body='<p>This will replace managed clone files with an older snapshot.</p>'+(m.loading?"Loading backups…":m.backups.length?'<select id="restore-select" class="select" style="width:100%">'+m.backups.map(b=>'<option value="'+e(b.id)+'">'+e(date(b.created_epoch_secs))+' · '+bytes(b.copied_bytes)+'</option>').join("")+'</select>':'<div class="notice warning">No valid backups exist.</div>');
+  body='<p>This will replace managed clone files with an older snapshot.</p>'+(m.loading?"Loading backups…":m.backups.length?'<select id="restore-select" class="select" style="width:100%">'+m.backups.map(b=>'<option value="'+e(b.id)+'" '+(m.backupId===b.id?"selected":"")+'>'+e(date(b.created_epoch_secs))+' · '+bytes(b.copied_bytes)+'</option>').join("")+'</select>':'<div class="notice warning">No valid backups exist.</div>');
  } else {title="Clear diagnostic history";body="<p>Delete both active and archived diagnostic journals? Your clones are unaffected.</p>"}
  root.innerHTML='<div class="modal-backdrop"><div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">'+title+'</h2></div><div class="modal-body">'+body+'</div><div class="modal-actions">'+btn("Cancel","close-modal")+btn(m.type==="delete"?"Delete permanently":m.type==="restore"?"Restore snapshot":m.type==="clear"?"Clear logs":"Confirm","confirm",m.type==="delete"||m.type==="clear"?"danger":"primary",(m.type==="restore"&&(m.loading||!m.backups.length))?"disabled":"")+'</div></div></div>';
 }
@@ -112,7 +112,7 @@ function openModal(type,id){
  const current=item(id);
  S.modal={type,id,name:type==="rename"?current?.name||"":"",backups:[],loading:type==="restore"};
  modalRender();
- if(type==="restore")api("list_backups",{id}).then(backups=>{if(S.modal?.id!==id)return;S.modal.backups=backups;S.modal.loading=false;modalRender()}).catch(err=>{alert(err,true);S.modal=null;modalRender()});
+ if(type==="restore")api("list_backups",{id}).then(backups=>{if(S.modal?.id!==id)return;S.modal.backups=backups;S.modal.backupId=backups[0]?.id||"";S.modal.loading=false;modalRender()}).catch(err=>{alert(err,true);S.modal=null;modalRender()});
 }
 async function confirm(){
  const m=S.modal;if(!m)return;
@@ -123,7 +123,7 @@ async function confirm(){
   if(m.type==="rename")await api("rename_instance",{id:m.id,name:m.name});
   if(m.type==="duplicate")await api("duplicate_instance",{id:m.id,name:m.name});
   if(m.type==="delete")await api("delete_instance",{id:m.id});
-  if(m.type==="restore")await api("restore_instance",{id:m.id,backupId:$("#restore-select").value});
+  if(m.type==="restore")await api("restore_instance",{id:m.id,backupId:m.backupId});
   if(m.type==="clear"){await api("clear_logs");await logs()}
   S.modal=null;
  },"Operation completed");
@@ -194,6 +194,7 @@ document.addEventListener("change",ev=>{
  else if(id==="isolated"){S.form.isolatedProfile=ev.target.checked;S.preflight=null}
  else if(["library-filter","discover-filter"].includes(id)){S.filter=ev.target.value;render()}
  else if(id==="logs-filter"){S.logFilter=ev.target.value;render()}
+ else if(id==="restore-select"&&S.modal){S.modal.backupId=ev.target.value}
 });
 document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&S.modal&&!S.busy){S.modal=null;modalRender()}});
 (async()=>{
