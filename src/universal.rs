@@ -2,11 +2,10 @@
 //! Discovery is read-only. A discovered app is never launched automatically.
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::env;
-#[cfg(not(target_os = "windows"))]
-use std::fs;
 use std::{
     collections::HashSet,
     ffi::OsString,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -33,6 +32,8 @@ pub struct DiscoveredApp {
     pub path: PathBuf,
     pub support: Support,
     pub note: String,
+    pub origin: &'static str,
+    pub launchable: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -100,6 +101,8 @@ fn candidate(name: String, path: PathBuf, installed: bool) -> DiscoveredApp {
     };
     DiscoveredApp {
         name,
+        launchable: path.exists(),
+        origin: if installed { "Installed application" } else { "Portable application" },
         path,
         support,
         note: note.into(),
@@ -107,11 +110,20 @@ fn candidate(name: String, path: PathBuf, installed: bool) -> DiscoveredApp {
 }
 
 fn add(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>, item: DiscoveredApp) {
-    if items.len() >= 300 {
+    let identity = item.name.trim().to_lowercase();
+    if identity.is_empty() {
         return;
     }
-    let identity = item.path.to_string_lossy().to_lowercase();
-    if seen.insert(identity) {
+    if seen.contains(&identity) {
+        if let Some(existing) = items.iter_mut().find(|app| app.name.eq_ignore_ascii_case(&item.name)) {
+            if !existing.launchable && item.launchable {
+                *existing = item;
+            }
+        }
+        return;
+    }
+    if items.len() < 1000 {
+        seen.insert(identity);
         items.push(item);
     }
 }
@@ -172,95 +184,7 @@ fn macos_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
 
 #[cfg(target_os = "windows")]
 fn windows_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
-    let mut roots = Vec::new();
-    for key in ["ProgramFiles", "ProgramFiles(x86)"] {
-        if let Some(root) = env::var_os(key) {
-            roots.push(PathBuf::from(root));
-        }
-    }
-    if let Some(local) = env::var_os("LOCALAPPDATA") {
-        roots.push(PathBuf::from(local).join("Programs"));
-    }
-
-    // Installed browsers are frequently nested, for example:
-    // Program Files/Google/Chrome/Application/chrome.exe.
-    // Walk a bounded number of entries without following junctions/symlinks.
-    let mut known = Vec::new();
-    let mut likely = Vec::new();
-    let mut others = Vec::new();
-    for root in roots {
-        for entry in walkdir::WalkDir::new(root)
-            .max_depth(5)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(|entry| entry.ok())
-            .take(12000)
-        {
-            if !entry.file_type().is_file() {
-                continue;
-            }
-            let path = entry.path();
-            if !path
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
-            {
-                continue;
-            }
-            let name = path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            let lowercase = name.to_lowercase();
-            if [
-                "uninstall",
-                "setup",
-                "update",
-                "helper",
-                "crash",
-                "service",
-                "install",
-                "broker",
-            ]
-            .iter()
-            .any(|word| lowercase.contains(word))
-            {
-                continue;
-            }
-            let parent_name = path
-                .parent()
-                .and_then(|parent| parent.file_name())
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            let parent_name =
-                if ["application", "bin", "x64"].contains(&parent_name.to_lowercase().as_str()) {
-                    path.parent()
-                        .and_then(|p| p.parent())
-                        .and_then(|p| p.file_name())
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string()
-                } else {
-                    parent_name
-                };
-            let app_name = if parent_name.is_empty() {
-                name.clone()
-            } else {
-                parent_name
-            };
-            let strong_match = app_name.eq_ignore_ascii_case(&name);
-            let app = candidate(app_name, path.to_path_buf(), true);
-            if app.support == Support::ProfileAdapter {
-                known.push(app);
-            } else if strong_match {
-                likely.push(app);
-            } else {
-                others.push(app);
-            }
-        }
-    }
-    for app in known.into_iter().chain(likely).chain(others).take(300) {
+    for app in crate::windows_installed::discover_apps() {
         add(items, seen, app);
     }
 }

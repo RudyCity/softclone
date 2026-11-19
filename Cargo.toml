@@ -24,3 +24,6 @@ tempfile = "3"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winreg = "0.55"
