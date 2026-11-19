@@ -211,7 +211,15 @@ impl DesktopApp {
                 if icon.rgba.len() != width * height * 4 {
                     continue;
                 }
-                if sender.send(IconPixels { path, width, height, rgba: icon.rgba }).is_err() {
+                if sender
+                    .send(IconPixels {
+                        path,
+                        width,
+                        height,
+                        rgba: icon.rgba,
+                    })
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -226,7 +234,12 @@ impl DesktopApp {
         let mut finished = false;
         loop {
             match receiver.try_recv() {
-                Ok(IconPixels { path, width, height, rgba }) => {
+                Ok(IconPixels {
+                    path,
+                    width,
+                    height,
+                    rgba,
+                }) => {
                     let texture = ctx.load_texture(
                         format!("installed-app:{}", path.display()),
                         egui::ColorImage::from_rgba_unmultiplied([width, height], &rgba),
