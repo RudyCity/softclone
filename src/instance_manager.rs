@@ -29,11 +29,11 @@ fn invalid(message: impl Into<String>) -> core::CloneError {
 
 fn validated_root(record: &CloneRecord, library: &Path) -> core::Result<PathBuf> {
     let library = fs::canonicalize(library)?;
-    if record.root.file_name().is_none_or(|name| {
-        !name
-            .to_string_lossy()
-            .ends_with(&record.id.to_string())
-    }) {
+    if record
+        .root
+        .file_name()
+        .is_none_or(|name| !name.to_string_lossy().ends_with(&record.id.to_string()))
+    {
         return Err(invalid("Instance folder does not match its registered ID."));
     }
     let metadata = fs::symlink_metadata(&record.root)?;
@@ -140,8 +140,7 @@ pub fn backup(
         };
         fs::write(
             staging.join("backup.json"),
-            serde_json::to_vec_pretty(&info)
-                .map_err(|error| invalid(error.to_string()))?,
+            serde_json::to_vec_pretty(&info).map_err(|error| invalid(error.to_string()))?,
         )?;
         fs::rename(&staging, destination)?;
         Ok(info)
@@ -255,11 +254,7 @@ pub fn restore(
 
 /// Delete a managed instance only after removing its registry entry. On
 /// registry write failure, the folder rename is rolled back.
-pub fn delete(
-    record: &CloneRecord,
-    library: &Path,
-    registry_path: &Path,
-) -> core::Result<()> {
+pub fn delete(record: &CloneRecord, library: &Path, registry_path: &Path) -> core::Result<()> {
     validate_member(record, registry_path)?;
     let source = validated_root(record, library)?;
     let library = fs::canonicalize(library)?;
@@ -347,7 +342,10 @@ mod tests {
         assert_eq!(list_backups(&backups, instance.id).unwrap().len(), 1);
         fs::write(instance.root.join("payload/app.exe"), b"v2").unwrap();
         restore(&instance, info.id, &library, &backups, &db).unwrap();
-        assert_eq!(fs::read(instance.root.join("payload/app.exe")).unwrap(), b"v1");
+        assert_eq!(
+            fs::read(instance.root.join("payload/app.exe")).unwrap(),
+            b"v1"
+        );
         assert_eq!(fs::read(&instance.source).unwrap(), b"bin");
     }
 
@@ -362,7 +360,10 @@ mod tests {
     #[test]
     fn rejects_forged_root_pointing_outside_library() {
         let (_dir, mut instance, library, backups, db) = fixture();
-        let external = library.parent().unwrap().join(format!("other-{}", instance.id));
+        let external = library
+            .parent()
+            .unwrap()
+            .join(format!("other-{}", instance.id));
         fs::create_dir(&external).unwrap();
         instance.root = external.clone();
         assert!(backup(&instance, &library, &backups, &db).is_err());

@@ -43,13 +43,8 @@ pub fn show(
                     });
                 ui.vertical(|ui| {
                     ui.add(
-                        Label::new(
-                            RichText::new(&instance.name)
-                                .size(16.0)
-                                .strong()
-                                .color(INK),
-                        )
-                        .wrap(),
+                        Label::new(RichText::new(&instance.name).size(16.0).strong().color(INK))
+                            .wrap(),
                     );
                     let kind = if instance.run_mode == RunMode::ProfileOnly {
                         "Installed app · profile-only"
@@ -59,12 +54,9 @@ pub fn show(
                         "Portable copy"
                     };
                     ui.label(
-                        RichText::new(format!(
-                            "{} · {kind}",
-                            format_bytes(instance.copied_bytes)
-                        ))
-                        .size(12.0)
-                        .color(MUTED),
+                        RichText::new(format!("{} · {kind}", format_bytes(instance.copied_bytes)))
+                            .size(12.0)
+                            .color(MUTED),
                     );
                     ui.add(
                         Label::new(
@@ -80,7 +72,11 @@ pub fn show(
                             None => "No managed process tracked".into(),
                         })
                         .size(11.0)
-                        .color(if running_pid.is_some() { ACCENT } else { MUTED }),
+                        .color(if running_pid.is_some() {
+                            ACCENT
+                        } else {
+                            MUTED
+                        }),
                     );
                 });
             });

@@ -1,4 +1,8 @@
-use crate::components::{create_form::CreateForm, discovery_form, instance_card::{self, Action as InstanceAction}};
+use crate::components::{
+    create_form::CreateForm,
+    discovery_form,
+    instance_card::{self, Action as InstanceAction},
+};
 use crate::icons::{self, Icon};
 use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2};
 use softclone::{
@@ -578,10 +582,27 @@ impl DesktopApp {
                         ui.add_space(13.0);
                         icons::inline(ui, Icon::Layers, 38.0, ACCENT);
                         ui.add_space(6.0);
-                        ui.label(RichText::new("A fresh workspace starts here").size(18.0).color(INK).strong());
-                        ui.label(RichText::new("Create a local app instance without modifying the original.").color(MUTED));
+                        ui.label(
+                            RichText::new("A fresh workspace starts here")
+                                .size(18.0)
+                                .color(INK)
+                                .strong(),
+                        );
+                        ui.label(
+                            RichText::new(
+                                "Create a local app instance without modifying the original.",
+                            )
+                            .color(MUTED),
+                        );
                         ui.add_space(10.0);
-                        if icons::button(ui, Icon::SquarePlus, "Create your first clone", Some(ACCENT)).clicked() {
+                        if icons::button(
+                            ui,
+                            Icon::SquarePlus,
+                            "Create your first clone",
+                            Some(ACCENT),
+                        )
+                        .clicked()
+                        {
                             self.page = Page::Create;
                         }
                     });
@@ -634,7 +655,9 @@ impl DesktopApp {
             }
             Err(error) => {
                 self.processes.insert(id, child);
-                Err(format!("Could not inspect process before stopping it: {error}"))
+                Err(format!(
+                    "Could not inspect process before stopping it: {error}"
+                ))
             }
         }
     }
@@ -665,7 +688,10 @@ impl DesktopApp {
             return;
         }
         if self.processes.contains_key(&record.id) && !matches!(&work, ManagerWork::Rename(_)) {
-            self.notice = Some(("Stop the tracked app before backup, restore or delete.".into(), true));
+            self.notice = Some((
+                "Stop the tracked app before backup, restore or delete.".into(),
+                true,
+            ));
             return;
         }
         let label = match &work {
@@ -684,22 +710,21 @@ impl DesktopApp {
             let result = match work {
                 ManagerWork::Rename(name) => instance_manager::rename(&record, &name, &database)
                     .map(|()| format!("Renamed instance to {name}.")),
-                ManagerWork::Backup => instance_manager::backup(
-                    &record, &library, &backups, &database,
-                )
-                .map(|info| format!(
-                    "Backup created: {} files, {}.",
-                    info.files,
-                    format_size(info.copied_bytes),
-                )),
-                ManagerWork::Restore(id) => instance_manager::restore(
-                    &record, id, &library, &backups, &database,
-                )
-                .map(|()| format!("Restored snapshot for {}.", record.name)),
-                ManagerWork::Delete => instance_manager::delete(
-                    &record, &library, &database,
-                )
-                .map(|()| format!("Deleted managed instance {}.", record.name)),
+                ManagerWork::Backup => {
+                    instance_manager::backup(&record, &library, &backups, &database).map(|info| {
+                        format!(
+                            "Backup created: {} files, {}.",
+                            info.files,
+                            format_size(info.copied_bytes),
+                        )
+                    })
+                }
+                ManagerWork::Restore(id) => {
+                    instance_manager::restore(&record, id, &library, &backups, &database)
+                        .map(|()| format!("Restored snapshot for {}.", record.name))
+                }
+                ManagerWork::Delete => instance_manager::delete(&record, &library, &database)
+                    .map(|()| format!("Deleted managed instance {}.", record.name)),
             }
             .map_err(|error| error.to_string());
             let _ = tx.send(result);
@@ -719,7 +744,8 @@ impl DesktopApp {
                 if let Ok(items) = registry_reload {
                     self.items = items;
                 } else if let Err(error) = registry_reload {
-                    self.notice = Some((format!("Could not reload instance registry: {error}"), true));
+                    self.notice =
+                        Some((format!("Could not reload instance registry: {error}"), true));
                     return;
                 }
                 match outcome {
@@ -741,18 +767,14 @@ impl DesktopApp {
     fn on_instance_action(&mut self, record: &CloneRecord, action: InstanceAction) {
         match action {
             InstanceAction::Launch => self.launch_managed(record),
-            InstanceAction::Stop => {
-                match self.stop_managed_process(record.id) {
-                    Ok(()) => self.notice = Some((format!("Stopped {}.", record.name), false)),
-                    Err(error) => self.notice = Some((error, true)),
-                }
-            }
-            InstanceAction::Restart => {
-                match self.stop_managed_process(record.id) {
-                    Ok(()) => self.launch_managed(record),
-                    Err(error) => self.notice = Some((error, true)),
-                }
-            }
+            InstanceAction::Stop => match self.stop_managed_process(record.id) {
+                Ok(()) => self.notice = Some((format!("Stopped {}.", record.name), false)),
+                Err(error) => self.notice = Some((error, true)),
+            },
+            InstanceAction::Restart => match self.stop_managed_process(record.id) {
+                Ok(()) => self.launch_managed(record),
+                Err(error) => self.notice = Some((error, true)),
+            },
             InstanceAction::OpenFolder => {
                 if let Err(error) = core::open_folder(&record.root) {
                     self.notice = Some((format!("Cannot open folder: {error}"), true));
@@ -765,19 +787,27 @@ impl DesktopApp {
             InstanceAction::Backup => self.start_manager_work(record.clone(), ManagerWork::Backup),
             InstanceAction::Restore => {
                 if self.processes.contains_key(&record.id) {
-                    self.notice = Some(("Stop this instance before restoring a snapshot.".into(), true));
+                    self.notice = Some((
+                        "Stop this instance before restoring a snapshot.".into(),
+                        true,
+                    ));
                     return;
                 }
                 match instance_manager::list_backups(&registry::backups_dir(), record.id) {
                     Ok(options) if options.is_empty() => {
-                        self.notice = Some(("No snapshot found for this instance. Create a backup first.".into(), true));
+                        self.notice = Some((
+                            "No snapshot found for this instance. Create a backup first.".into(),
+                            true,
+                        ));
                     }
                     Ok(options) => {
                         self.restore_selected = Some(options[0].id);
                         self.restore_options = options;
                         self.pending_manager = Some(PendingManager::Restore(record.id));
                     }
-                    Err(error) => self.notice = Some((format!("Cannot read backups: {error}"), true)),
+                    Err(error) => {
+                        self.notice = Some((format!("Cannot read backups: {error}"), true))
+                    }
                 }
             }
             InstanceAction::Delete => {
