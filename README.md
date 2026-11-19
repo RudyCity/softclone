@@ -40,3 +40,18 @@ For architectural details and threat-model limitations, see [docs/architecture.m
 Use only software you have permission to copy. SoftClone does **not** elevate privileges, run an installer, copy application credentials or import browser profiles. Relative symlinks that resolve within the chosen source are preserved on Unix; external links and Windows symlinks are rejected. All launches use explicit process APIs, not shell interpolation.
 
 License: MIT.
+
+## Universal compatibility track (0.2)
+
+SoftClone now offers two separate strategies:
+
+- **Portable copy:** creates a local copy of a self-contained executable, directory, AppImage or macOS app bundle. It cannot reproduce missing services, licensing or installation state.
+- **Profile-only:** keeps installed binary files where they are and prepares separate local data directories. Known Chromium-family browsers use the --user-data-dir argument; Firefox uses -no-remote and -profile. Other apps may ignore those settings.
+
+**Discover apps** scans Windows Program Files and user Programs, macOS Applications directories, and Linux desktop launchers and selected AppImage locations. Discovery does not execute candidate applications.
+
+Installed applications without known profile adapters are labeled as requiring manual review. This initial discovery does not support Windows Store/MSIX packages, Flatpak/Snap sandboxed launches, system services, drivers, DRM or bypass of licensing or activation restrictions.
+
+Select **Create clone** to choose copying app files versus using an installed app with a dedicated profile. This distinction matters: a profile is not a virtual machine or a security sandbox.
+
+See docs/architecture.md for the current support matrix.
