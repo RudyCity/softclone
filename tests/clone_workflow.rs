@@ -4,7 +4,7 @@ use softclone::{
 };
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::{fs, path::Path};
+use std::{fs, path::Path, sync::atomic::{AtomicBool, Ordering}};
 
 fn make_source(dir: &Path) -> std::path::PathBuf {
     let source = dir.join("my-source");
@@ -188,4 +188,85 @@ fn legacy_registry_defaults_to_copy_mode() {
     }"#;
     let record: core::CloneRecord = serde_json::from_str(json).unwrap();
     assert_eq!(record.run_mode, core::RunMode::Copy);
+}
+
+#[test]
+fn preflight_estimates_source_without_creating_destination() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let source = make_source(sandbox.path());
+    fs::write(source.join("extra.txt"), vec![11u8; 2048]).unwrap();
+    let prepared = core::prepare(&CloneRequest {
+        source: source.clone(),
+        name: "Preview".into(),
+        entrypoint: String::new(),
+        isolated_profile: true,
+    })
+    .unwrap();
+    let before = fs::metadata(source.join("extra.txt")).unwrap().len();
+    let plan = core::analyze(&prepared).unwrap();
+    assert_eq!(plan.total_files, 3);
+    assert!(plan.total_bytes >= before + 13);
+    assert!(!sandbox.path().join("destination").exists());
+}
+
+#[test]
+fn cancellation_cleans_partial_directory_without_touching_source() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let source = make_source(sandbox.path());
+    let big_file = source.join("large-payload.dat");
+    fs::write(&big_file, vec![0xAB; 6 * 1024 * 1024]).unwrap();
+    let prepared = core::prepare(&CloneRequest {
+        source: source.clone(),
+        name: "Cancelable".into(),
+        entrypoint: String::new(),
+        isolated_profile: true,
+    })
+    .unwrap();
+    let library = sandbox.path().join("library");
+    let cancel = AtomicBool::new(false);
+    let mut callbacks = 0usize;
+    let result = core::create_clone_with_progress(&prepared, &library, &cancel, |progress| {
+        callbacks += 1;
+        assert!(progress.total_files >= 3);
+        cancel.store(true, Ordering::SeqCst);
+    });
+    assert!(matches!(result, Err(core::CloneError::Cancelled)));
+    assert!(callbacks > 0);
+    assert!(big_file.is_file());
+    assert_eq!(fs::read_dir(library).unwrap().count(), 0);
+}
+
+#[test]
+fn starting_in_cancelled_state_does_not_create_library() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let source = make_source(sandbox.path());
+    let prepared = core::prepare(&CloneRequest {
+        source,
+        name: "Precancel".into(),
+        entrypoint: String::new(),
+        isolated_profile: false,
+    })
+    .unwrap();
+    let library = sandbox.path().join("library");
+    let cancelled = AtomicBool::new(true);
+    let result = core::create_clone_with_progress(&prepared, &library, &cancelled, |_| {});
+    assert!(matches!(result, Err(core::CloneError::Cancelled)));
+    assert!(!library.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn preflight_rejects_external_symlinks_without_destination_changes() {
+    let sandbox = tempfile::tempdir().unwrap();
+    let source = make_source(sandbox.path());
+    let outside = sandbox.path().join("private");
+    fs::write(&outside, b"no").unwrap();
+    std::os::unix::fs::symlink(&outside, source.join("external")).unwrap();
+    let prepared = core::prepare(&CloneRequest {
+        source,
+        name: "Reject links".into(),
+        entrypoint: "mytool".into(),
+        isolated_profile: false,
+    }).unwrap();
+    assert!(matches!(core::analyze(&prepared), Err(core::CloneError::Link(_))));
 }
