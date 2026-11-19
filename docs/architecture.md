@@ -55,3 +55,14 @@ The desktop shell owns navigation, registry integration, background workers and 
 - MSIX/Windows Store packages are not yet enumerated. Win32 uninstall registry entries are not a complete inventory of all packages; Windows PackageManager API integration remains an outstanding feature.
 - Icons for macOS/Linux are currently fallback vectors rather than native app artwork; real icon extraction for these OSes remains outstanding.
 - The scanner remains read-only and the engine does not bypass licenses, DRM, services, drivers or OS sandboxing.
+
+
+## Smart Clone Engine (v0.4.0)
+
+\`analyze(prepared)\` is read-only and reports \`CopyPlan { total_bytes, total_files }\` after validating symlinks and unsupported source file types. No library is created by analysis. For portable mode, \`create_clone_with_progress\` re-runs preflight, performs the original nested-library checks, writes files in 256 KiB chunks, periodically invokes \`CopyProgress\`, and checks a shared \`AtomicBool\` cancellation flag. It preserves file permission bits and relative symlinks that resolve within source on Unix. It does **not** preserve all extended filesystem metadata.
+
+The \`.partial\` staging directory is removed on any copy error or cancellation. Registry write failure triggers a best-effort removal of the newly created clone directory. Source and instance folders are not touched during preflight. Original \`create_clone\` delegates to the new engine with cancellation disabled, preserving existing API and registry compatibility.
+
+The desktop form provides a separate nonblocking preflight worker with stale-result suppression (input fingerprint), and a copy worker that streams progress to the UI. Cancellation requests remain visible while cleanup is pending; successful copies are saved and shown in the library. Profile-only instances continue to use the existing lightweight creation path, as their binaries are not copied.
+
+Copy estimates do not currently check the target filesystem's free space. Before large clones, users should ensure sufficient free storage. True filesystem snapshots, atomic source isolation, full extended-attribute preservation and privileged OS sandboxing remain out of scope.

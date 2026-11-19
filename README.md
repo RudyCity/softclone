@@ -83,3 +83,14 @@ This is a presentation and organization update; it does not claim new OS-level c
 **Supported boundaries:** Windows Store/MSIX package enumeration and launching are not implemented yet, nor is full system-installed application virtualization. Unknown apps can be displayed for review, but they are not guaranteed to have isolated profiles. The compatibility assessment always distinguishes known browser profile adapters from manual review.
 
 **Test/release:** the repository's CI runs formatting, Clippy, unit/integration tests and release builds on Windows, macOS and Linux. Each release is created only after all platforms pass, and includes SHA256SUMS.
+
+
+## Smart Clone Engine (v0.4.0)
+
+Create clone includes a **Preflight Check** button. It scans the selected source on a background worker, validates internal/external symbolic links, rejects unsupported special files, and estimates file count and bytes to be copied before any destination files are created. Profile-only instances report that no binary copy is required. Results are tied to the form inputs and hidden when source, entrypoint, mode or name changes.
+
+Portable copies now use a **cancellable streaming copy** with progress by bytes and files. Cancel requests are checked between chunks and before final publication. Files are written into a unique staging directory; a successful clone is atomically renamed into place. A cancelled or failed copy deletes the incomplete staging directory. The original source is not modified. If persisting the new instance to the registry fails, SoftClone also attempts to delete the newly created instance, with an explicit error if cleanup fails.
+
+The existing \`create_clone\` Rust API and saved registry format remain backward-compatible. The new \`create_clone_with_progress\` API enables progress and cancellation and uses the same validation pipeline. The interface displays progress and a cancel action, but background filesystem operations still respect OS permissions and cannot bypass a vendor's licensing or app isolation policies.
+
+**Caveats:** Preflight sizes are estimates that may become stale if source files change. This is not a snapshot or filesystem transaction across the source and destination. Per-file timestamps, extended attributes and macOS signatures may not survive a custom portable copy; treat signed bundles and vendor-installed applications as manual-review cases. Cancellation is cooperative, not instant during every operating-system syscall.

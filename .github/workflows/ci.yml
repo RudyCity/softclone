@@ -56,7 +56,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish v0.3.0
+    name: Publish v0.4.0
     needs: desktop
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -86,19 +86,19 @@ jobs:
           test -s dist/windows/softclone.exe
           test -s dist/linux/softclone
           mkdir -p release
-          (cd dist/windows && zip -q ../../release/SoftClone-v0.3.0-windows-x64.zip softclone.exe)
+          (cd dist/windows && zip -q ../../release/SoftClone-v0.4.0-windows-x64.zip softclone.exe)
           chmod +x dist/linux/softclone
-          tar -czf release/SoftClone-v0.3.0-linux-x64.tar.gz -C dist/linux softclone
+          tar -czf release/SoftClone-v0.4.0-linux-x64.tar.gz -C dist/linux softclone
           found=0
           while IFS= read -r -d '' binary; do
             found=1
             parent=$(basename "$(dirname "$binary")")
             arch=$(printf '%s' "${parent#softclone-macos-}" | tr '[:upper:]' '[:lower:]')
             chmod +x "$binary"
-            tar -czf "release/SoftClone-v0.3.0-macos-${arch}.tar.gz" -C "$(dirname "$binary")" softclone
+            tar -czf "release/SoftClone-v0.4.0-macos-${arch}.tar.gz" -C "$(dirname "$binary")" softclone
           done < <(find dist/macos -type f -name softclone -print0)
           test "$found" -eq 1
-          (cd release && sha256sum SoftClone-v0.3.0-* > SHA256SUMS.txt)
+          (cd release && sha256sum SoftClone-v0.4.0-* > SHA256SUMS.txt)
       - name: Publish only after all platform tests and builds succeed
         shell: bash
         env:
@@ -106,15 +106,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if gh release view v0.3.0 >/dev/null 2>&1; then
-            echo "Release v0.3.0 is already published. Leaving published assets unchanged."
+          if gh release view v0.4.0 >/dev/null 2>&1; then
+            echo "Release v0.4.0 is already published. Leaving published assets unchanged."
             exit 0
           fi
-          if git ls-remote --exit-code --tags origin refs/tags/v0.3.0 >/dev/null 2>&1; then
-            echo "::error::Tag v0.3.0 already exists. Refusing to publish against a possibly different commit."
+          if git ls-remote --exit-code --tags origin refs/tags/v0.4.0 >/dev/null 2>&1; then
+            echo "::error::Tag v0.4.0 already exists. Refusing to publish against a possibly different commit."
             exit 1
           fi
-          gh release create v0.3.0 release/* \
+          gh release create v0.4.0 release/* \
             --target "$GITHUB_SHA" \
-            --title "SoftClone v0.3.0" \
-            --notes-file docs/releases/v0.3.0.md
+            --title "SoftClone v0.4.0" \
+            --notes-file docs/releases/v0.4.0.md
