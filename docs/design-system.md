@@ -35,3 +35,7 @@ Each clone card is a reusable component showing a tracked PID when running, othe
 ## v0.5.2 native Store inventory
 
 Discover cards distinguish Win32 launchers, AppX/MSIX packages, Mac App Store bundles and OBS plugins. Win32 entries with unresolved executables show a secondary **Locate executable…** picker rather than a disabled action. Package entries show **Open app** with a tooltip explaining that native package launching does not create a separate SoftClone instance. Search supports AUMID, product names, publisher and version; a Store entry is distinct from a same-named Win32 entry.
+
+## Discover toolbar alignment (v0.5.3)
+
+The shared search field is 35 pt high (19 pt text area plus 8 pt vertical padding each side), matching the custom Rescan button. Search and Rescan share a top-aligned horizontal layout; the icon and single-line editor share a cross-centered horizontal row. Keep these dimensions synchronized when adjusting control sizing or DPI behavior.

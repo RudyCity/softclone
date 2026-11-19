@@ -129,3 +129,9 @@ To test two windows: quit all previous Zoom instances (including the system tray
 **macOS:** App bundles already discovered in `/Applications`, `/System/Applications`, and `~/Applications` are additionally classified as Mac App Store apps when an `_MASReceipt/receipt` file exists in the bundle. These entries show **Open app**, which uses standard macOS application activation, not cloning or new App Store credentials. Receipt detection is a heuristic and doesn't prove current license validity. Apps without receipts may still have come from the App Store. The existing `.app` discovery remains available.
 
 **Limitations:** AppX/MSIX enumeration is for packages registered to the current Windows user and with a visible Start-app launcher, not all system components. A missing or restricted PowerShell source falls back to Win32 discovery; no package modifications occur. Store apps remain manual-review/non-cloneable through direct file copying. Other desktop apps may require services, drivers, vendor-specific adapters, or authentication. CI verifies code and artifact builds, not Store launch behavior on your personal PC.
+
+## v0.5.3 — Search toolbar alignment
+
+The Discover apps search input and Rescan control share a 35-point control height and align along the top edge of the same row. Search text and magnifying-glass icon use compact, cross-centered egui row geometry rather than the previously oversized inner TextEdit.
+
+The change is limited to UI layout. Application discovery, Store inventory, cloning and saved profiles remain unchanged.
