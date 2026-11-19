@@ -37,6 +37,8 @@ pub struct DiscoveredApp {
     pub launchable: bool,
     pub publisher: Option<String>,
     pub version: Option<String>,
+    /// Registered AUMID for an MSIX/AppX app; it cannot be cloned as an exe.
+    pub store_id: Option<String>,
 }
 
 /// Non-destructive filters for the installed-app inventory.
@@ -54,7 +56,7 @@ impl AppFilter {
             Self::All => true,
             Self::ProfileReady => app.launchable && app.support == Support::ProfileAdapter,
             Self::NeedsReview => app.support == Support::ReviewRequired,
-            Self::MissingExecutable => !app.launchable,
+            Self::MissingExecutable => !app.launchable && app.store_id.is_none(),
         }
     }
 }
@@ -76,6 +78,7 @@ pub fn matches_app(app: &DiscoveredApp, query: &str, filter: AppFilter) -> bool 
             .as_ref()
             .is_some_and(|value| value.to_lowercase().contains(&query))
         || app.path.to_string_lossy().to_lowercase().contains(&query)
+        || app.store_id.as_ref().is_some_and(|id| id.to_lowercase().contains(&query))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -181,18 +184,26 @@ fn candidate(name: String, path: PathBuf, installed: bool) -> DiscoveredApp {
         note: note.into(),
         publisher: None,
         version: None,
+        store_id: None,
     }
 }
 
 fn add(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>, item: DiscoveredApp) {
-    let identity = item.name.trim().to_lowercase();
+    let identity = format!(
+        "{}{}",
+        item.name.trim().to_lowercase(),
+        if item.store_id.is_some() { ":packaged" } else { "" }
+    );
     if identity.is_empty() {
         return;
     }
     if seen.contains(&identity) {
         if let Some(existing) = items
             .iter_mut()
-            .find(|app| app.name.eq_ignore_ascii_case(&item.name))
+            .find(|app| {
+                app.name.eq_ignore_ascii_case(&item.name)
+                    && app.store_id.is_some() == item.store_id.is_some()
+            })
         {
             if !existing.launchable && item.launchable {
                 *existing = item;
@@ -204,6 +215,18 @@ fn add(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>, item: Discove
         seen.insert(identity);
         items.push(item);
     }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_candidate(name: String, path: PathBuf) -> DiscoveredApp {
+    let store_receipt = path.join("Contents/_MASReceipt/receipt").is_file();
+    let mut result = candidate(name, path, true);
+    if store_receipt {
+        result.origin = "Mac App Store (receipt found)";
+        result.support = Support::ReviewRequired;
+        result.note = "Mac App Store app: can be opened normally, but copying the bundle or bypassing its receipt/licensing is unsupported.".into();
+    }
+    result
 }
 
 #[cfg(target_os = "macos")]
@@ -236,7 +259,7 @@ fn macos_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string();
-                add(items, seen, candidate(title, path, true));
+                add(items, seen, macos_candidate(title, path));
             } else if path.file_name().is_some_and(|n| n == "Utilities") {
                 if let Ok(nested) = fs::read_dir(path) {
                     for entry in nested.flatten() {
@@ -251,7 +274,7 @@ fn macos_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
                                 .unwrap_or_default()
                                 .to_string_lossy()
                                 .to_string();
-                            add(items, seen, candidate(title, app, true));
+                            add(items, seen, macos_candidate(title, app));
                         }
                     }
                 }
@@ -263,6 +286,9 @@ fn macos_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
 #[cfg(target_os = "windows")]
 fn windows_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
     for app in crate::windows_installed::discover_apps() {
+        add(items, seen, app);
+    }
+    for app in crate::windows_store::discover_apps() {
         add(items, seen, app);
     }
 }
@@ -467,6 +493,7 @@ mod tests {
             launchable: false,
             publisher: None,
             version: None,
+            store_id: None,
         };
         app.publisher = Some("Acme Software".into());
         app.version = Some("8.4".into());
@@ -479,6 +506,37 @@ mod tests {
         app.support = Support::ProfileAdapter;
         assert!(matches_app(&app, "example", AppFilter::ProfileReady));
         assert!(!matches_app(&app, "", AppFilter::MissingExecutable));
+    }
+
+    #[test]
+    fn store_inventory_is_not_treated_as_a_missing_executable() {
+        let app = DiscoveredApp {
+            name: "Store App".into(),
+            path: PathBuf::new(),
+            support: Support::ReviewRequired,
+            note: String::new(),
+            origin: "MSIX",
+            launchable: true,
+            publisher: None,
+            version: None,
+            store_id: Some("Example.App_abc!App".into()),
+        };
+        assert!(matches_app(&app, "", AppFilter::All));
+        assert!(matches_app(&app, "abc", AppFilter::NeedsReview));
+        assert!(!matches_app(&app, "", AppFilter::MissingExecutable));
+        assert!(!matches_app(&app, "", AppFilter::ProfileReady));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_app_store_receipt_marks_bundle_as_review_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let bundle = dir.path().join("Editor.app");
+        fs::create_dir_all(bundle.join("Contents/_MASReceipt")).unwrap();
+        fs::write(bundle.join("Contents/_MASReceipt/receipt"), b"test").unwrap();
+        let app = macos_candidate("Editor".into(), bundle);
+        assert_eq!(app.origin, "Mac App Store (receipt found)");
+        assert_eq!(app.support, Support::ReviewRequired);
     }
 
     #[test]
