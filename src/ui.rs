@@ -2,13 +2,17 @@ use crate::components::{create_form::CreateForm, discovery_form};
 use crate::icons::{self, Icon};
 use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2};
 use softclone::{
-    core::{self, CloneRecord, CloneRequest, RunMode},
+    core::{self, CloneRecord, CloneRequest, CopyPlan, CopyProgress, RunMode},
     registry,
     universal::{self, AppFilter, DiscoveredApp, Support},
 };
 use std::{
     path::PathBuf,
-    sync::mpsc::{self, Receiver},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -36,6 +40,11 @@ struct IconPixels {
     rgba: Vec<u8>,
 }
 
+enum CloneEvent {
+    Progress(CopyProgress),
+    Finished(Result<CloneRecord, String>),
+}
+
 pub struct DesktopApp {
     page: Page,
     items: Vec<CloneRecord>,
@@ -53,7 +62,12 @@ pub struct DesktopApp {
     #[cfg(target_os = "windows")]
     app_icons: std::collections::HashMap<PathBuf, egui::TextureHandle>,
     discovery_complete: bool,
-    worker: Option<Receiver<Result<CloneRecord, String>>>,
+    worker: Option<Receiver<CloneEvent>>,
+    cancel_token: Option<Arc<AtomicBool>>,
+    cancellation_requested: bool,
+    copy_progress: Option<CopyProgress>,
+    analysis_worker: Option<Receiver<(String, Result<CopyPlan, String>)>>,
+    analysis: Option<(String, CopyPlan)>,
     notice: Option<(String, bool)>,
 }
 
@@ -93,34 +107,112 @@ impl DesktopApp {
             app_icons: std::collections::HashMap::new(),
             discovery_complete: false,
             worker: None,
+            cancel_token: None,
+            cancellation_requested: false,
+            copy_progress: None,
+            analysis_worker: None,
+            analysis: None,
             notice,
         }
     }
 
+    fn analysis_key(&self) -> String {
+        format!(
+            "{}\u{0}{}\u{0}{}\u{0}{}",
+            self.source, self.name, self.entrypoint, self.profile_only
+        )
+    }
+
+    fn start_analysis(&mut self) {
+        if self.analysis_worker.is_some() || self.worker.is_some() {
+            return;
+        }
+        let key = self.analysis_key();
+        let request = CloneRequest {
+            source: PathBuf::from(self.source.trim()),
+            name: self.name.clone(),
+            entrypoint: self.entrypoint.clone(),
+            isolated_profile: self.isolated || self.profile_only,
+        };
+        let profile_only = self.profile_only;
+        let (sender, receiver) = mpsc::channel();
+        self.analysis_worker = Some(receiver);
+        self.analysis = None;
+        std::thread::spawn(move || {
+            let result = core::prepare(&request)
+                .and_then(|prepared| {
+                    if profile_only {
+                        Ok(CopyPlan::default())
+                    } else {
+                        core::analyze(&prepared)
+                    }
+                })
+                .map_err(|err| err.to_string());
+            let _ = sender.send((key, result));
+        });
+    }
+
+    fn tick_analysis(&mut self, ctx: &egui::Context) {
+        let result = self.analysis_worker.as_ref().map(|worker| worker.try_recv());
+        match result {
+            Some(Ok((key, outcome))) => {
+                if key == self.analysis_key() {
+                    match outcome {
+                        Ok(plan) => self.analysis = Some((key, plan)),
+                        Err(error) => self.notice = Some((format!("Preflight failed: {error}"), true)),
+                    }
+                }
+                self.analysis_worker = None;
+            }
+            Some(Err(mpsc::TryRecvError::Disconnected)) => {
+                self.notice = Some(("Preflight worker stopped unexpectedly.".into(), true));
+                self.analysis_worker = None;
+            }
+            Some(Err(mpsc::TryRecvError::Empty)) => {
+                ctx.request_repaint_after(Duration::from_millis(130));
+            }
+            None => {}
+        }
+    }
+
     fn tick_worker(&mut self, ctx: &egui::Context) {
+        let mut finished = None;
         if let Some(worker) = &self.worker {
-            match worker.try_recv() {
-                Ok(Ok(item)) => {
+            loop {
+                match worker.try_recv() {
+                    Ok(CloneEvent::Progress(progress)) => self.copy_progress = Some(progress),
+                    Ok(CloneEvent::Finished(result)) => {
+                        finished = Some(result);
+                        break;
+                    }
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        finished = Some(Err("Clone worker stopped unexpectedly.".into()));
+                        break;
+                    }
+                    Err(mpsc::TryRecvError::Empty) => {
+                        ctx.request_repaint_after(Duration::from_millis(120));
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(result) = finished {
+            self.worker = None;
+            self.cancel_token = None;
+            self.cancellation_requested = false;
+            self.copy_progress = None;
+            match result {
+                Ok(item) => {
                     self.items.insert(0, item);
                     self.notice = Some(("Clone created. You can now launch it.".into(), false));
-                    self.worker = None;
                     self.page = Page::Library;
                     self.source.clear();
                     self.name.clear();
                     self.entrypoint.clear();
                     self.profile_only = false;
+                    self.analysis = None;
                 }
-                Ok(Err(e)) => {
-                    self.notice = Some((e, true));
-                    self.worker = None;
-                }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    self.notice = Some(("Clone worker stopped unexpectedly.".into(), true));
-                    self.worker = None;
-                }
-                Err(mpsc::TryRecvError::Empty) => {
-                    ctx.request_repaint_after(Duration::from_millis(120))
-                }
+                Err(error) => self.notice = Some((error, true)),
             }
         }
     }
@@ -601,6 +693,12 @@ impl DesktopApp {
         let path = PathBuf::from(self.source.trim());
         let next_label_number =
             self.items.iter().filter(|item| item.source == path).count() as i64 + 1;
+        let current_key = self.analysis_key();
+        let analysis = self
+            .analysis
+            .as_ref()
+            .filter(|(key, _)| key == &current_key)
+            .map(|(_, plan)| plan);
         let action = CreateForm {
             source: &mut self.source,
             name: &mut self.name,
@@ -609,6 +707,10 @@ impl DesktopApp {
             profile_only: &mut self.profile_only,
             next_label_number,
             creating: self.worker.is_some(),
+            analyzing: self.analysis_worker.is_some(),
+            analysis,
+            progress: self.copy_progress.as_ref(),
+            cancellation_requested: self.cancellation_requested,
         }
         .show(ui);
         if let Some(message) = action.error {
@@ -635,6 +737,15 @@ impl DesktopApp {
                 }
             }
         }
+        if action.analyze {
+            self.start_analysis();
+        }
+        if action.cancel {
+            if let Some(cancel) = &self.cancel_token {
+                cancel.store(true, Ordering::SeqCst);
+                self.cancellation_requested = true;
+            }
+        }
         if action.submit {
             self.submit();
         }
@@ -646,43 +757,64 @@ impl DesktopApp {
     }
 
     fn submit(&mut self) {
-        if self.worker.is_some() {
+        if self.worker.is_some() || self.analysis_worker.is_some() {
             return;
         }
-        let req = CloneRequest {
+        let request = CloneRequest {
             source: PathBuf::from(self.source.trim()),
             name: self.name.clone(),
             entrypoint: self.entrypoint.clone(),
             isolated_profile: self.isolated || self.profile_only,
         };
-        let prepared = match core::prepare(&req) {
+        let prepared = match core::prepare(&request) {
             Ok(plan) => plan,
-            Err(e) => {
-                self.notice = Some((format!("Check clone details: {e}"), true));
+            Err(error) => {
+                self.notice = Some((format!("Check clone details: {error}"), true));
                 return;
             }
         };
         let library = registry::library_dir();
         let profile_only = self.profile_only;
-        let (tx, rx) = mpsc::channel();
-        self.worker = Some(rx);
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.cancel_token = Some(Arc::clone(&cancel));
+        self.cancellation_requested = false;
+        self.copy_progress = None;
+        let (sender, receiver) = mpsc::channel();
+        self.worker = Some(receiver);
         std::thread::spawn(move || {
             let result = (if profile_only {
-                core::create_profile_instance(&prepared, &library)
+                if cancel.load(Ordering::SeqCst) {
+                    Err(core::CloneError::Cancelled)
+                } else {
+                    core::create_profile_instance(&prepared, &library)
+                }
             } else {
-                core::create_clone(&prepared, &library)
+                core::create_clone_with_progress(
+                    &prepared,
+                    &library,
+                    &cancel,
+                    |progress| {
+                        let _ = sender.send(CloneEvent::Progress(progress));
+                    },
+                )
             })
-            .map_err(|e| e.to_string())
+            .map_err(|error| error.to_string())
             .and_then(|item| {
-                registry::add(item.clone()).map_err(|e| {
-                    format!(
-                        "Instance created, but registry save failed: {e}. Location: {}",
-                        item.root.display()
-                    )
-                })?;
+                if let Err(error) = registry::add(item.clone()) {
+                    let cleanup = std::fs::remove_dir_all(&item.root);
+                    return Err(match cleanup {
+                        Ok(()) => format!(
+                            "Could not register instance: {error}. Newly created files were removed."
+                        ),
+                        Err(cleanup_error) => format!(
+                            "Could not register instance: {error}. Cleanup failed at {}: {cleanup_error}",
+                            item.root.display(),
+                        ),
+                    });
+                }
                 Ok(item)
             });
-            let _ = tx.send(result);
+            let _ = sender.send(CloneEvent::Finished(result));
         });
     }
 
@@ -736,6 +868,7 @@ impl DesktopApp {
 impl eframe::App for DesktopApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.tick_worker(ctx);
+        self.tick_analysis(ctx);
         self.tick_discovery(ctx);
         #[cfg(target_os = "windows")]
         self.tick_icons(ctx);
