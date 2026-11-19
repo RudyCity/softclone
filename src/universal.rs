@@ -35,6 +35,41 @@ pub struct DiscoveredApp {
     pub note: String,
     pub origin: &'static str,
     pub launchable: bool,
+    pub publisher: Option<String>,
+    pub version: Option<String>,
+}
+
+/// Non-destructive filters for the installed-app inventory.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AppFilter {
+    #[default]
+    All,
+    ProfileReady,
+    NeedsReview,
+    MissingExecutable,
+}
+impl AppFilter {
+    pub fn matches(self, app: &DiscoveredApp) -> bool {
+        match self {
+            Self::All => true,
+            Self::ProfileReady => app.launchable && app.support == Support::ProfileAdapter,
+            Self::NeedsReview => app.support == Support::ReviewRequired,
+            Self::MissingExecutable => !app.launchable,
+        }
+    }
+}
+
+/// Search over display name, publisher, version and executable path.
+pub fn matches_app(app: &DiscoveredApp, query: &str, filter: AppFilter) -> bool {
+    if !filter.matches(app) {
+        return false;
+    }
+    let query = query.trim().to_lowercase();
+    query.is_empty()
+        || app.name.to_lowercase().contains(&query)
+        || app.publisher.as_ref().is_some_and(|value| value.to_lowercase().contains(&query))
+        || app.version.as_ref().is_some_and(|value| value.to_lowercase().contains(&query))
+        || app.path.to_string_lossy().to_lowercase().contains(&query)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,6 +147,8 @@ fn candidate(name: String, path: PathBuf, installed: bool) -> DiscoveredApp {
         path,
         support,
         note: note.into(),
+        publisher: None,
+        version: None,
     }
 }
 
@@ -387,6 +424,22 @@ pub fn discover_apps() -> Vec<DiscoveredApp> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn filtering_respects_readiness_and_metadata() {
+        let mut app = candidate("Example Editor".into(), PathBuf::from("example"), true);
+        app.publisher = Some("Acme Software".into());
+        app.version = Some("8.4".into());
+        app.launchable = false;
+        assert!(matches_app(&app, "acme", AppFilter::All));
+        assert!(matches_app(&app, "8.4", AppFilter::All));
+        assert!(matches_app(&app, "", AppFilter::MissingExecutable));
+        assert!(!matches_app(&app, "", AppFilter::ProfileReady));
+        app.launchable = true;
+        app.support = Support::ProfileAdapter;
+        assert!(matches_app(&app, "example", AppFilter::ProfileReady));
+        assert!(!matches_app(&app, "", AppFilter::MissingExecutable));
+    }
+
     #[test]
     fn known_browsers_use_profiles() {
         assert_eq!(

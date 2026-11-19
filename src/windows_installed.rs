@@ -186,6 +186,10 @@ fn installed_programs(results: &mut HashMap<String, DiscoveredApp>) {
                         continue;
                     }
                 }
+                let publisher: Option<String> = item.get_value("Publisher").ok();
+                let version: Option<String> = item.get_value("DisplayVersion").ok();
+                let publisher = publisher.filter(|value| !value.trim().is_empty());
+                let version = version.filter(|value| !value.trim().is_empty());
                 let icon: Option<String> = item.get_value("DisplayIcon").ok();
                 let location: Option<String> = item.get_value("InstallLocation").ok();
                 let target = locate_app(name, icon.as_deref(), location.as_deref());
@@ -212,6 +216,8 @@ fn installed_programs(results: &mut HashMap<String, DiscoveredApp>) {
                         note: note.to_string(),
                         origin: "Windows installed programs",
                         launchable,
+                        publisher,
+                        version,
                     },
                 );
             }
@@ -272,6 +278,8 @@ fn known_browser_fallback(results: &mut HashMap<String, DiscoveredApp>) {
                     note: "Installed browser discovered by its main executable.".into(),
                     origin: "Installed browser",
                     launchable: true,
+                    publisher: None,
+                    version: None,
                 },
             );
         }
@@ -314,6 +322,8 @@ mod tests {
             note: String::new(),
             origin: "Registry",
             launchable: false,
+            publisher: None,
+            version: None,
         };
         register(&mut results, missing);
         let main = DiscoveredApp {
@@ -323,6 +333,8 @@ mod tests {
             note: String::new(),
             origin: "Browser",
             launchable: true,
+            publisher: None,
+            version: None,
         };
         register(&mut results, main);
         assert_eq!(results.len(), 1);
