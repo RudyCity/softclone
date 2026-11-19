@@ -1,6 +1,6 @@
 //! Read-only discovery of user-installed AppX/MSIX packages via Windows'
- //! package registration and Start menu AUMID metadata.
- //! Unlike Win32 software, these apps cannot be cloned by copying an .exe.
+//! package registration and Start menu AUMID metadata.
+//! Unlike Win32 software, these apps cannot be cloned by copying an .exe.
 use crate::universal::{DiscoveredApp, Support};
 use serde::Deserialize;
 use std::{path::PathBuf, process::Command};
@@ -15,9 +15,9 @@ pub fn valid_aumid(input: &str) -> bool {
         && !app.is_empty()
         && input.len() <= 240
         && !app.contains('!')
-        && input.bytes().all(|ch| {
-            ch.is_ascii_alphanumeric() || matches!(ch, b'.' | b'_' | b'-' | b'!')
-        })
+        && input
+            .bytes()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, b'.' | b'_' | b'-' | b'!'))
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,7 +105,13 @@ fn parse_entries(json: &str) -> Vec<DiscoveredApp> {
 
 pub fn discover_apps() -> Vec<DiscoveredApp> {
     let result = Command::new("powershell.exe")
-        .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", STORE_SCRIPT])
+        .args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            STORE_SCRIPT,
+        ])
         .output();
     match result {
         Ok(output) if output.status.success() && output.stdout.len() <= 2_000_000 => {

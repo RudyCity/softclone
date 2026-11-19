@@ -78,7 +78,10 @@ pub fn matches_app(app: &DiscoveredApp, query: &str, filter: AppFilter) -> bool 
             .as_ref()
             .is_some_and(|value| value.to_lowercase().contains(&query))
         || app.path.to_string_lossy().to_lowercase().contains(&query)
-        || app.store_id.as_ref().is_some_and(|id| id.to_lowercase().contains(&query))
+        || app
+            .store_id
+            .as_ref()
+            .is_some_and(|id| id.to_lowercase().contains(&query))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -192,19 +195,20 @@ fn add(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>, item: Discove
     let identity = format!(
         "{}{}",
         item.name.trim().to_lowercase(),
-        if item.store_id.is_some() { ":packaged" } else { "" }
+        if item.store_id.is_some() {
+            ":packaged"
+        } else {
+            ""
+        }
     );
     if identity.is_empty() {
         return;
     }
     if seen.contains(&identity) {
-        if let Some(existing) = items
-            .iter_mut()
-            .find(|app| {
-                app.name.eq_ignore_ascii_case(&item.name)
-                    && app.store_id.is_some() == item.store_id.is_some()
-            })
-        {
+        if let Some(existing) = items.iter_mut().find(|app| {
+            app.name.eq_ignore_ascii_case(&item.name)
+                && app.store_id.is_some() == item.store_id.is_some()
+        }) {
             if !existing.launchable && item.launchable {
                 *existing = item;
             }

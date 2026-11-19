@@ -1082,7 +1082,9 @@ impl DesktopApp {
                         .pick_file();
                     if let Some(path) = selected {
                         if path.is_file()
-                            && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+                            && path
+                                .extension()
+                                .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
                         {
                             self.source = path.display().to_string();
                             self.name = format!("{} copy", app.name);

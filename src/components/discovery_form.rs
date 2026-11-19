@@ -176,8 +176,11 @@ fn choose_button(ui: &mut Ui, app: &DiscoveredApp) -> Option<AppCardAction> {
         return None;
     }
     if app.store_id.is_some() || app.origin == "Mac App Store (receipt found)" {
-        return ui.button("Open app")
-            .on_hover_text("Open normally without cloning; Store package/profile isolation is not supported.")
+        return ui
+            .button("Open app")
+            .on_hover_text(
+                "Open normally without cloning; Store package/profile isolation is not supported.",
+            )
             .clicked()
             .then_some(AppCardAction::OpenStoreApp);
     }
@@ -208,7 +211,11 @@ fn app_avatar(ui: &mut Ui, texture: Option<&egui::TextureHandle>) {
             }
         });
 }
-pub fn app_card(ui: &mut Ui, app: &DiscoveredApp, texture: Option<&egui::TextureHandle>) -> Option<AppCardAction> {
+pub fn app_card(
+    ui: &mut Ui,
+    app: &DiscoveredApp,
+    texture: Option<&egui::TextureHandle>,
+) -> Option<AppCardAction> {
     Frame::new()
         .fill(Color32::WHITE)
         .stroke(egui::Stroke::new(1.0_f32, fields::BORDER))

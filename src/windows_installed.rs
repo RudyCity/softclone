@@ -96,7 +96,8 @@ fn safe_exe(path: &Path) -> bool {
 
 /// Installed plugins are not independent desktop applications.
 pub fn is_known_component(name: &str) -> bool {
-    name.to_ascii_lowercase().starts_with("advanced-scene-switcher")
+    name.to_ascii_lowercase()
+        .starts_with("advanced-scene-switcher")
 }
 
 fn expected_primary_exes(name: &str) -> &'static [&'static str] {
@@ -118,7 +119,9 @@ fn primary_exe_matches(name: &str, file: &Path) -> bool {
     let expected = expected_primary_exes(name);
     expected.is_empty()
         || file.file_name().is_some_and(|basename| {
-            expected.iter().any(|candidate| basename.eq_ignore_ascii_case(candidate))
+            expected
+                .iter()
+                .any(|candidate| basename.eq_ignore_ascii_case(candidate))
         })
 }
 
@@ -182,7 +185,8 @@ fn locate_in_root(name: &str, root: &Path) -> Option<PathBuf> {
         }
         let stem = normalize(&file.file_stem()?.to_string_lossy());
         let score = if expected_primary_exes(name).iter().any(|exe| {
-            file.file_name().is_some_and(|actual| actual.eq_ignore_ascii_case(exe))
+            file.file_name()
+                .is_some_and(|actual| actual.eq_ignore_ascii_case(exe))
         }) {
             4
         } else if stem == normalized_name {
@@ -409,13 +413,31 @@ mod tests {
 
     #[test]
     fn known_program_names_map_to_real_launchers() {
-        assert_eq!(expected_primary_exes("Android Studio"), &["studio64.exe", "studio.exe"]);
-        assert_eq!(expected_primary_exes("Adobe Illustrator 2026"), &["illustrator.exe"]);
+        assert_eq!(
+            expected_primary_exes("Android Studio"),
+            &["studio64.exe", "studio.exe"]
+        );
+        assert_eq!(
+            expected_primary_exes("Adobe Illustrator 2026"),
+            &["illustrator.exe"]
+        );
         assert_eq!(expected_primary_exes("CapCut"), &["capcut.exe"]);
-        assert_eq!(expected_primary_exes("OBSBOT Center version 2.0"), &["obsbot_main.exe", "obsbot_center.exe"]);
-        assert!(primary_exe_matches("Android Studio", Path::new("studio64.exe")));
-        assert!(!primary_exe_matches("Android Studio", Path::new("uninstall.exe")));
-        assert!(!primary_exe_matches("Adobe Illustrator 2026", Path::new("Creative Cloud.exe")));
+        assert_eq!(
+            expected_primary_exes("OBSBOT Center version 2.0"),
+            &["obsbot_main.exe", "obsbot_center.exe"]
+        );
+        assert!(primary_exe_matches(
+            "Android Studio",
+            Path::new("studio64.exe")
+        ));
+        assert!(!primary_exe_matches(
+            "Android Studio",
+            Path::new("uninstall.exe")
+        ));
+        assert!(!primary_exe_matches(
+            "Adobe Illustrator 2026",
+            Path::new("Creative Cloud.exe")
+        ));
         assert!(is_known_component("advanced-scene-switcher version 1.26.2"));
         assert!(!is_known_component("OBS Studio"));
         assert!(!is_known_component("Android Studio"));
@@ -441,7 +463,11 @@ mod tests {
             Some(nested.join("Illustrator.exe"))
         );
         assert_eq!(
-            locate_app("advanced-scene-switcher version 1.26.2", None, adobe.to_str()),
+            locate_app(
+                "advanced-scene-switcher version 1.26.2",
+                None,
+                adobe.to_str()
+            ),
             None
         );
     }
