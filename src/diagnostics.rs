@@ -62,9 +62,16 @@ impl Event {
     pub const fn category(self) -> &'static str {
         match self {
             Self::ApplicationStarted | Self::RegistryLoadFailed | Self::LogsExported => "App",
-            Self::DiscoveryStarted | Self::DiscoveryCompleted | Self::DiscoveryFailed => "Discovery",
-            Self::PreflightStarted | Self::PreflightCompleted | Self::PreflightFailed => "Preflight",
-            Self::CloneStarted | Self::CloneCompleted | Self::CloneFailed | Self::CloneCancelled => "Clone",
+            Self::DiscoveryStarted | Self::DiscoveryCompleted | Self::DiscoveryFailed => {
+                "Discovery"
+            }
+            Self::PreflightStarted | Self::PreflightCompleted | Self::PreflightFailed => {
+                "Preflight"
+            }
+            Self::CloneStarted
+            | Self::CloneCompleted
+            | Self::CloneFailed
+            | Self::CloneCancelled => "Clone",
             Self::LaunchStarted
             | Self::LaunchFailed
             | Self::ProcessStopped
@@ -169,8 +176,12 @@ impl LogBook {
             last_storage_error: None,
         };
         if let Ok(file) = fs::File::open(&book.path) {
-            if file.metadata().is_ok_and(|meta| meta.len() > MAX_FILE_BYTES) {
-                book.last_storage_error = Some("Previous log exceeded the size limit; history was not loaded.".into());
+            if file
+                .metadata()
+                .is_ok_and(|meta| meta.len() > MAX_FILE_BYTES)
+            {
+                book.last_storage_error =
+                    Some("Previous log exceeded the size limit; history was not loaded.".into());
             } else {
                 for line in BufReader::new(file).lines().map_while(Result::ok) {
                     if let Ok(entry) = serde_json::from_str::<Entry>(&line) {
@@ -207,9 +218,16 @@ impl LogBook {
     }
 
     fn append(&self, entry: &Entry) -> io::Result<()> {
-        let parent = self.path.parent().ok_or_else(|| io::Error::other("No diagnostics directory"))?;
+        let parent = self
+            .path
+            .parent()
+            .ok_or_else(|| io::Error::other("No diagnostics directory"))?;
         fs::create_dir_all(parent)?;
-        if self.path.metadata().is_ok_and(|meta| meta.len() >= MAX_FILE_BYTES) {
+        if self
+            .path
+            .metadata()
+            .is_ok_and(|meta| meta.len() >= MAX_FILE_BYTES)
+        {
             // Only one archived copy is kept. No unbounded or verbose trace files.
             let rotated = self.path.with_extension("previous.jsonl");
             if rotated.exists() {
@@ -217,7 +235,10 @@ impl LogBook {
             }
             fs::rename(&self.path, rotated)?;
         }
-        let mut file = OpenOptions::new().create(true).append(true).open(&self.path)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
         serde_json::to_writer(&mut file, entry).map_err(io::Error::other)?;
         file.write_all(b"\n")
     }
@@ -276,9 +297,20 @@ mod tests {
         log.record(Event::LaunchFailed);
         let reloaded = LogBook::load(path);
         assert_eq!(reloaded.entries().len(), 2);
-        assert_eq!(reloaded.entries().iter().filter(|e| Filter::Error.matches(e)).count(), 1);
-        assert!(reloaded.report("test", "windows").contains("Managed application launch failed"));
-        assert!(!reloaded.report("test", "windows").contains(dir.path().to_string_lossy().as_ref()));
+        assert_eq!(
+            reloaded
+                .entries()
+                .iter()
+                .filter(|e| Filter::Error.matches(e))
+                .count(),
+            1
+        );
+        assert!(reloaded
+            .report("test", "windows")
+            .contains("Managed application launch failed"));
+        assert!(!reloaded
+            .report("test", "windows")
+            .contains(dir.path().to_string_lossy().as_ref()));
     }
 
     #[test]

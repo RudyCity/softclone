@@ -3,7 +3,9 @@ use crate::components::{
     discovery_form,
     instance_card::{self, Action as InstanceAction},
 };
-use crate::diagnostics::{Event as DiagnosticEvent, Filter as LogFilter, Level as LogLevel, LogBook};
+use crate::diagnostics::{
+    Event as DiagnosticEvent, Filter as LogFilter, Level as LogLevel, LogBook,
+};
 use crate::icons::{self, Icon};
 use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2};
 use softclone::{
@@ -287,7 +289,7 @@ impl DesktopApp {
                 Err(error) => {
                     self.log_event(DiagnosticEvent::CloneFailed);
                     self.notice = Some((error, true));
-                },
+                }
             }
         }
     }
@@ -486,7 +488,12 @@ impl DesktopApp {
                         .strong(),
                 );
                 ui.add_space(8.0);
-                if Self::nav_button(ui, Icon::Activity, "Debug logs", self.page == Page::Diagnostics) {
+                if Self::nav_button(
+                    ui,
+                    Icon::Activity,
+                    "Debug logs",
+                    self.page == Page::Diagnostics,
+                ) {
                     self.page = Page::Diagnostics;
                 }
                 ui.add_space(18.0);
@@ -504,7 +511,8 @@ impl DesktopApp {
                     self.page = Page::About;
                 }
                 if Self::nav_button(ui, Icon::Heart, "Support development", false) {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab("https://ko-fi.com/rudycity"));
+                    ui.ctx()
+                        .open_url(egui::OpenUrl::new_tab("https://ko-fi.com/rudycity"));
                 }
                 ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
                     ui.label(
@@ -1461,7 +1469,11 @@ impl DesktopApp {
             .filter(|entry| entry.level() == LogLevel::Error)
             .count();
         ui.horizontal_wrapped(|ui| {
-            Self::stat(ui, &self.diagnostics.entries().len().to_string(), "Recent events");
+            Self::stat(
+                ui,
+                &self.diagnostics.entries().len().to_string(),
+                "Recent events",
+            );
             Self::stat(ui, &error_count.to_string(), "Errors");
             Self::stat(ui, &self.items.len().to_string(), "Managed instances");
         });
@@ -1532,7 +1544,11 @@ impl DesktopApp {
                 continue;
             }
             if !search.is_empty()
-                && !entry.event.category().to_ascii_lowercase().contains(&search)
+                && !entry
+                    .event
+                    .category()
+                    .to_ascii_lowercase()
+                    .contains(&search)
                 && !entry.event.message().to_ascii_lowercase().contains(&search)
                 && !entry.level().label().to_ascii_lowercase().contains(&search)
             {
@@ -1558,9 +1574,13 @@ impl DesktopApp {
                                 .size(11.0),
                         );
                         ui.label(
-                            RichText::new(format!("{} · {}", entry.timestamp_secs, entry.event.category()))
-                                .color(MUTED)
-                                .size(11.0),
+                            RichText::new(format!(
+                                "{} · {}",
+                                entry.timestamp_secs,
+                                entry.event.category()
+                            ))
+                            .color(MUTED)
+                            .size(11.0),
                         );
                         ui.label(RichText::new(entry.event.message()).color(INK).size(12.5));
                     });
@@ -1568,10 +1588,7 @@ impl DesktopApp {
             ui.add_space(6.0);
         }
         if shown == 0 {
-            crate::components::fields::helper(
-                ui,
-                "No diagnostic events match the current filter.",
-            );
+            crate::components::fields::helper(ui, "No diagnostic events match the current filter.");
         }
         ui.add_space(12.0);
         crate::components::fields::helper(
@@ -1606,7 +1623,9 @@ impl DesktopApp {
         if clear {
             match self.diagnostics.clear() {
                 Ok(()) => self.notice = Some(("Diagnostic history cleared.".into(), false)),
-                Err(error) => self.notice = Some((format!("Could not clear all logs: {error}"), true)),
+                Err(error) => {
+                    self.notice = Some((format!("Could not clear all logs: {error}"), true))
+                }
             }
             close = true;
         }
