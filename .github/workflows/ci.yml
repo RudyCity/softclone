@@ -1,124 +1,116 @@
-name: Desktop CI
+name: Tauri Desktop CI
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
+  engine:
+    name: Rust engine and frontend
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rust format
+        run: cargo fmt --all -- --check
+      - name: Rust lint
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Core tests
+        run: cargo test --all-targets
+      - name: JavaScript syntax
+        run: node --check frontend/app.js
+
   desktop:
-    name: Build and test
+    name: Native Tauri build (${{ matrix.os }})
+    needs: engine
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-22.04, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - name: Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libwayland-dev libxcb1-dev libx11-dev libegl1-mesa-dev
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 file
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: Lint
-        run: cargo clippy --all-targets -- -D warnings
-      - name: Tests
-        run: cargo test --all-targets
-      - name: Release build
-        run: cargo build --release --bin softclone
-      - name: Windows binary
-        if: runner.os == 'Windows'
+        with:
+          workspaces: src-tauri -> target
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Tauri CLI
+        run: npm install --no-audit --no-fund
+      - name: Check Tauri formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - name: Check desktop host
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Build native installer packages
+        run: npm run build
+      - name: Upload platform bundles
         uses: actions/upload-artifact@v4
         with:
-          name: softclone-windows-x64
-          path: target/release/softclone.exe
+          name: softclone-tauri-v0.6.0-${{ runner.os }}
+          path: src-tauri/target/release/bundle/**
           if-no-files-found: error
-      - name: macOS binary
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
-        with:
-          name: softclone-macos-${{ runner.arch }}
-          path: target/release/softclone
-          if-no-files-found: error
-      - name: Linux binary
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: softclone-linux-x64
-          path: target/release/softclone
-          if-no-files-found: error
+          retention-days: 14
 
   publish:
-    name: Publish v0.5.5
-    needs: desktop
+    name: Publish verified v0.6.0 bundles
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: desktop
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Download verified Windows binary
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: softclone-windows-x64
-          path: dist/windows
-      - name: Download verified Linux binary
-        uses: actions/download-artifact@v4
-        with:
-          name: softclone-linux-x64
-          path: dist/linux
-      - name: Download verified macOS binary
-        uses: actions/download-artifact@v4
-        with:
-          pattern: softclone-macos-*
-          path: dist/macos
-      - name: Prepare versioned archives
+          pattern: softclone-tauri-v0.6.0-*
+          path: dist
+      - name: Prepare release assets
         shell: bash
         run: |
           set -euo pipefail
-          test -s dist/windows/softclone.exe
-          test -s dist/linux/softclone
           mkdir -p release
-          # Apache-2.0 section 4(a): include the complete license in every distributed archive.
-          cp LICENSE NOTICE dist/windows/
-          cp LICENSE NOTICE dist/linux/
-          (cd dist/windows && zip -q ../../release/SoftClone-v0.5.5-windows-x64.zip softclone.exe LICENSE NOTICE)
-          chmod +x dist/linux/softclone
-          tar -czf release/SoftClone-v0.5.5-linux-x64.tar.gz -C dist/linux softclone LICENSE NOTICE
-          found=0
-          while IFS= read -r -d '' binary; do
-            found=1
-            parent=$(basename "$(dirname "$binary")")
-            arch=$(printf '%s' "${parent#softclone-macos-}" | tr '[:upper:]' '[:lower:]')
-            chmod +x "$binary"
-            cp LICENSE NOTICE "$(dirname "$binary")/"
-            tar -czf "release/SoftClone-v0.5.5-macos-${arch}.tar.gz" -C "$(dirname "$binary")" softclone LICENSE NOTICE
-          done < <(find dist/macos -type f -name softclone -print0)
-          test "$found" -eq 1
-          (cd release && sha256sum SoftClone-v0.5.5-* > SHA256SUMS.txt)
-      - name: Publish only after all platform tests and builds succeed
+          find dist -type f \( -name '*.msi' -o -name '*.exe' -o -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \) -print0 |
+            while IFS= read -r -d '' asset; do
+              cp "$asset" "release/$(basename "$asset")"
+            done
+          test -n "$(find release -type f -print -quit)"
+          cp LICENSE NOTICE release/
+          (cd release && sha256sum -- * > SHA256SUMS.txt)
+      - name: Publish
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if gh release view v0.5.5 >/dev/null 2>&1; then
-            echo "Release v0.5.5 is already published. Leaving published assets unchanged."
+          if gh release view v0.6.0 >/dev/null 2>&1; then
+            echo "Release v0.6.0 already exists; leaving published assets unchanged."
             exit 0
           fi
-          if git ls-remote --exit-code --tags origin refs/tags/v0.5.5 >/dev/null 2>&1; then
-            echo "::error::Tag v0.5.5 already exists. Refusing to publish against a possibly different commit."
+          if git ls-remote --exit-code --tags origin refs/tags/v0.6.0 >/dev/null 2>&1; then
+            echo "::error::Tag v0.6.0 exists without matching release."
             exit 1
           fi
-          gh release create v0.5.5 release/* \
+          gh release create v0.6.0 release/* \
             --target "$GITHUB_SHA" \
-            --title "SoftClone v0.5.5" \
-            --notes-file docs/releases/v0.5.5.md
+            --title "SoftClone v0.6.0 - Tauri 2 desktop" \
+            --notes-file docs/releases/v0.6.0.md

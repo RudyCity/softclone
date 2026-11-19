@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Only local core webview permissions. Filesystem and process operations are exposed through explicitly validated Rust commands.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

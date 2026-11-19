@@ -1,14 +1,14 @@
 [package]
 name = "softclone"
-version = "0.5.5"
+version = "0.6.0"
 edition = "2021"
 rust-version = "1.88"
 license = "Apache-2.0"
-description = "Native portable application cloning workspace"
+description = "Local portable app cloning and profile engine powering the SoftClone Tauri desktop"
 repository = "https://github.com/RudyCity/softclone"
+autobins = false
 
 [dependencies]
-eframe = { version = "0.33.3", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 rune = "0.14.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -16,7 +16,6 @@ dirs = "6"
 uuid = { version = "1", features = ["v4", "serde"] }
 walkdir = "2"
 thiserror = "2"
-rfd = "0.17.2"
 
 [dev-dependencies]
 tempfile = "3"
@@ -28,4 +27,3 @@ strip = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.55"
-win_icon_extractor = { package = "win-icon-extractor", version = "0.3.0", default-features = false }

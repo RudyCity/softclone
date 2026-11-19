@@ -1,5 +1,7 @@
-//! Cross-platform file operations and persistent clone registry.
+//! Cross-platform file operations, persistent clone registry and local diagnostics.
+//! This library intentionally has no GUI toolkit dependency.
 pub mod core;
+pub mod diagnostics;
 pub mod instance_manager;
 pub mod registry;
 pub mod rune_engine;

@@ -1,149 +1,53 @@
 # SoftClone
 
-A focused, native desktop workspace for making **local, user-controlled copies of portable applications** on Windows, macOS and Linux.
+**Tauri 2 desktop application powered by Rust and Rune.** Make and manage local, user-controlled copies of portable apps, plus separate profiles for installed apps with documented adapters.
 
-> **Scope:** SoftClone copies portable application folders, macOS `.app` bundles, and stand-alone executables / AppImages. It does not bypass activation, licenses, DRM, platform signatures, installation services, sandbox restrictions or apps bound to a single machine. Separating per-instance configuration through environment variables is **best effort**, not a security sandbox.
+**Platforms:** Windows, macOS and Linux. **Project license:** [Apache-2.0](LICENSE) (see [NOTICE](NOTICE)).
 
-## Stack
+## Technology
 
-- **Rust** handles file operations, path validation, app launching and persistence.
-- **Rune** (embedded Rust scripting VM) calculates clone labels without filesystem or shell APIs.
-- **egui / eframe** provides the native desktop interface.
-- **GitHub Actions** checks formatting, builds and tests on Windows, macOS and Linux.
+- **Tauri 2** hosts the native desktop window and its offline HTML/CSS/JavaScript frontend.
+- **Rust** retains the safe copy engine, preflight, cancellation, registry, app discovery, launch control, backups, restore and diagnostics.
+- **Rune** runs a data-only, embedded rule for clone-name suggestions. It has no OS or filesystem bindings.
+- The frontend uses no web frameworks, CDNs, remote scripts or telemetry.
 
-## Quick start
+This release **replaces egui/eframe** entirely. Existing instance data stays in `dirs::data_local_dir()/SoftClone/instances.json`; there is no registry schema migration, and earlier clones remain available.
 
-Install Rust stable (1.88+) and required system graphics development libraries for your OS.
+## Develop
 
-```bash
-cargo run --release
-cargo test
+Install [Rust stable](https://www.rust-lang.org/tools/install), Node.js and the OS prerequisites from [Tauri's setup guide](https://v2.tauri.app/start/prerequisites/). On Linux, install the GTK3/WebKit2GTK 4.1 development libraries, AppIndicator, librsvg, patchelf and the system build toolchain.
+
+```sh
+npm install
+npm run dev
 ```
 
-Open **Create clone** and enter an accessible local path to an application directory, `.app` bundle, `.exe` file or AppImage. For a general directory, select a relative executable entry point. Copies are stored under the application data directory in `instances/`; the source is never modified. A fresh profile directory is prepared per clone.
+## Verify and build
 
-## Current support
+```sh
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets
+node --check frontend/app.js
+npm run build
+```
 
-| Capability | Windows | macOS | Linux |
-| --- | --- | --- | --- |
-| Copy portable files / folders | Yes | Yes | Yes |
-| Copy / launch macOS .app bundle | — | Yes | — |
-| Copy / launch standalone executable | .exe | executable | executable / AppImage |
-| Instance-specific environment directories | Best effort | Best effort | Best effort |
-| Full OS / kernel-level sandbox | No | No | No |
-| Installed system app cloning | Not guaranteed | Not guaranteed | Not guaranteed |
+`npm run build` produces **native Tauri installers and packages**, not the earlier unbundled egui executables. The CI workflow tests the core and builds native desktop bundles on Windows, macOS and Linux. Uploads are GitHub Actions artifacts; a release is only published after the platform build matrix passes.
 
-For architectural details and threat-model limitations, see [docs/architecture.md](docs/architecture.md). Design principles: [docs/design-system.md](docs/design-system.md).
+## Features
 
-## Safety
+- **My clones:** list, search, launch, stop and restart managed child processes; rename, duplicate, back up, restore, delete, and open managed folders.
+- **Create clone:** portable-copy and profile-only modes; native file/folder chooser, path and entrypoint validation, preflight, progress and cancellation.
+- **Discover apps:** read-only Windows Win32/Store inventory, macOS app bundles, Linux desktop launchers, compatibility notes and filters.
+- **Debug logs:** local bounded event history with severity filtering, sanitized export and clear.
+- **About:** version, platform, license, source, local data folder and optional [Ko-fi](https://ko-fi.com/rudycity).
 
-Use only software you have permission to copy. SoftClone does **not** elevate privileges, run an installer, copy application credentials or import browser profiles. Relative symlinks that resolve within the chosen source are preserved on Unix; external links and Windows symlinks are rejected. All launches use explicit process APIs, not shell interpolation.
+Only directly tracked process handles can be stopped. The app does not elevate privileges or terminate arbitrary PIDs.
 
-License: **Apache-2.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+## Boundaries and privacy
 
-## Universal compatibility track (0.2)
+SoftClone **does not** bypass activation, software licenses, DRM, signatures, platform sandbox rules, app services or installation systems. Portable file copying is not universal application virtualization. Browser-specific profile flags, Windows Zoom multi-instance arguments and environment-based profile paths are best effort and do not guarantee true isolation or distinct GUI windows. Windows Store/MSIX packages can be opened, **not cloned**; vendor rules continue to apply.
 
-SoftClone now offers two separate strategies:
+All clone files and diagnostic logs stay on the local device. Backups may contain private application data and are not encrypted. There is no background telemetry. Third-party software retains its own license.
 
-- **Portable copy:** creates a local copy of a self-contained executable, directory, AppImage or macOS app bundle. It cannot reproduce missing services, licensing or installation state.
-- **Profile-only:** keeps installed binary files where they are and prepares separate local data directories. Known Chromium-family browsers use the --user-data-dir argument; Firefox uses -no-remote and -profile. Other apps may ignore those settings.
-
-**Discover apps** scans Windows Program Files and user Programs, macOS Applications directories, and Linux desktop launchers and selected AppImage locations. Discovery does not execute candidate applications.
-
-Installed applications without known profile adapters are labeled as requiring manual review. This initial discovery does not support Windows Store/MSIX packages, Flatpak/Snap sandboxed launches, system services, drivers, DRM or bypass of licensing or activation restrictions.
-
-Select **Create clone** to choose copying app files versus using an installed app with a dedicated profile. This distinction matters: a profile is not a virtual machine or a security sandbox.
-
-See docs/architecture.md for the current support matrix.
-
-### Installed application discovery and vector icons (0.2.1)
-
-Windows discovery now reads the native **Apps & Features / Installed Programs registry** (HKLM + HKCU, 32-bit and 64-bit views) instead of listing arbitrary executables and folders such as browser version `157.0.*`. It uses the registered `DisplayName`, resolves the real launch executable from `DisplayIcon` or `InstallLocation` when possible, filters system components and updates, and de-duplicates product names. A narrowly scoped executable fallback discovers known browser launchers only.
-
-Registered software without a known safe launch path remains visible but cannot be selected automatically; provide the executable path manually instead. Microsoft Store/MSIX apps are not supported by this reader yet.
-
-The navigation and status UI uses **native egui-painted vector icons**, not Unicode glyphs or system icon fonts. This avoids missing-glyph boxes on Windows, macOS and Linux. See [the release notes](docs/releases/v0.2.1.md).
-
-### Reusable desktop form components (0.2.2)
-
-Every form is now composed from reusable egui components under `src/components/`: `fields.rs` (text input, label, helper text, section dividers and integrated search icon), `discovery_form.rs` (search/rescan/status controls and responsive app cards), and `create_form.rs` (source, instance details, strategy and submit sections).
-
-Discover search and Rescan are grouped in a unified toolbar, while scanning progress and match counts occupy their own status line. Explanatory text wraps instead of extending outside the viewport. The interface supports narrow and wide desktop content areas without detached search icons. Creation keeps its validation and existing Rune name suggestions.
-
-This is a presentation and organization update; it does not claim new OS-level cloning isolation. [Release notes](docs/releases/v0.2.2.md).
-
-## Installed Apps 2.0 — first milestone (v0.3.0)
-
-**New Windows inventory fields:** registered publisher and display version, with an explicit availability assessment. Discovery now searches application name, publisher, version and executable path, and offers filters for All apps / Profile-ready / Requires review / Missing executable.
-
-**Windows icons:** executable icons are loaded using read-only OS resource extraction on a separate background worker. Extraction is bounded to a subset of installed executables; an egui vector fallback appears when a native icon is not available. macOS/Linux currently retain vector icons.
-
-**Native source chooser:** Create clone now offers Choose executable / Choose folder dialogs, alongside manual path entry. Dialogs run locally and do not upload selected files.
-
-**Supported boundaries:** Windows Store/MSIX package enumeration and launching are not implemented yet, nor is full system-installed application virtualization. Unknown apps can be displayed for review, but they are not guaranteed to have isolated profiles. The compatibility assessment always distinguishes known browser profile adapters from manual review.
-
-**Test/release:** the repository's CI runs formatting, Clippy, unit/integration tests and release builds on Windows, macOS and Linux. Each release is created only after all platforms pass, and includes SHA256SUMS.
-
-
-## Smart Clone Engine (v0.4.0)
-
-Create clone includes a **Preflight Check** button. It scans the selected source on a background worker, validates internal/external symbolic links, rejects unsupported special files, and estimates file count and bytes to be copied before any destination files are created. Profile-only instances report that no binary copy is required. Results are tied to the form inputs and hidden when source, entrypoint, mode or name changes.
-
-Portable copies now use a **cancellable streaming copy** with progress by bytes and files. Cancel requests are checked between chunks and before final publication. Files are written into a unique staging directory; a successful clone is atomically renamed into place. A cancelled or failed copy deletes the incomplete staging directory. The original source is not modified. If persisting the new instance to the registry fails, SoftClone also attempts to delete the newly created instance, with an explicit error if cleanup fails.
-
-The existing \`create_clone\` Rust API and saved registry format remain backward-compatible. The new \`create_clone_with_progress\` API enables progress and cancellation and uses the same validation pipeline. The interface displays progress and a cancel action, but background filesystem operations still respect OS permissions and cannot bypass a vendor's licensing or app isolation policies.
-
-**Caveats:** Preflight sizes are estimates that may become stale if source files change. This is not a snapshot or filesystem transaction across the source and destination. Per-file timestamps, extended attributes and macOS signatures may not survive a custom portable copy; treat signed bundles and vendor-installed applications as manual-review cases. Cancellation is cooperative, not instant during every operating-system syscall.
-
-## Instance Manager (v0.5.0)
-
-The My clones workspace supports these explicit managed-instance actions:
-
-- **Launch, Stop and Restart:** processes started during the current SoftClone session are tracked by their child handle and PID. The app never kills an arbitrary PID. On macOS, the `open` launcher may exit before the GUI app and process tracking is best effort.
-- **Rename:** changes the display label in the registry without moving installed files.
-- **Duplicate:** copies only an existing SoftClone instance folder to a unique new managed folder, with its own registry record. The source app installation is not modified.
-- **Backup:** takes a local, directory-based snapshot under the SoftClone data folder (`backups/`). These are not encrypted or compressed archives and may contain sensitive personal app data or tokens.
-- **Restore:** selects a snapshot belonging to the same instance, stages a copy, swaps the managed directory and attempts rollback on failure. The original installed application is never overwritten.
-- **Delete:** requires typing the exact instance name, validates the library path and registry, stages removal with registry rollback on failure, and deletes managed instance files. Existing backups remain available.
-
-**Safety boundaries:** Stop/Restart works only for directly tracked processes in the current session. If an app starts child processes or outlives a launcher, those may not be tracked. Close any externally launched app before duplicating, backing up, restoring or deleting. No feature bypasses licensing, DRM, services or OS sandboxing.
-
-The Rust lifecycle API is in `src/instance_manager.rs`, with tests for backup/restore, duplication, rename, deletion and path protections.
-
-## Zoom Workplace: two Windows desktop instances (v0.5.1)
-
-SoftClone now supports Zoom's official Windows multi-instance launch options for `Zoom.exe`. Each managed instance launches with `--multipt=TRUE` and a stable, distinct `--data=data<instance UUID>` selector. This is Zoom's published method for testing multiple simultaneous instances on one Windows computer; see [Zoom's official developer guide](https://developers.zoom.us/docs/zoom-apps/guides/testing/#running-multiple-instances-of-zoom-on-one-computer).
-
-**Existing SoftClone Zoom profiles do not need to be recreated.** The app uses the UUID already stored in each clone record. When using Zoom Workplace, select the actual `Zoom.exe` executable and choose **Use installed application with a separate profile**. The original installed Zoom files are not altered. The Zoom adapter preserves ordinary Windows APPDATA/LOCALAPPDATA rather than redirecting those environment variables, which can interfere with installed Zoom helpers. The official per-instance `--data` selector is used instead.
-
-To test two windows: quit all previous Zoom instances (including the system tray), start profile 1 and profile 2 from SoftClone, and sign in with the appropriate Zoom accounts. The result depends on the installed Zoom client, its policies, available resources and account restrictions. The launch feedback reports a requested launch; only an on-device test can verify that two separate GUI windows appear. Zoom account switching within one window is a separate Zoom feature.
-
-**OS support:** this adapter is Windows-only. macOS multi-instance setup follows different Zoom documentation, requiring a separately installed/renamed `.app` bundle; Linux has no equivalent adapter here. Other software that ignores profile arguments is still not guaranteed to run concurrently.
-
-## Native installed apps and Store inventory (v0.5.2)
-
-**Windows:** Discover Apps now combines registered Win32 programs, known browser executables, and current-user AppX/MSIX packages. Store packages are enumerated read-only using Windows PowerShell `Get-AppxPackage`, `Get-AppxPackageManifest`, and Start-menu `Get-StartApps` metadata. For packaged apps with a registered Application User Model ID (AUMID), SoftClone shows a distinct **Open app** action that invokes normal Windows activation. This does **not** copy the package, create an independent profile or bypass the Microsoft Store's sandbox, permissions, licensing, or account policies. Windows packages may also be deployed outside the Store; the 'AppX/MSIX' source label does not establish where the user acquired them.
-
-**Windows installer app improvements:** the resolver now recognizes primary launchers for Adobe Illustrator, Android Studio (`studio64.exe`), CapCut (`CapCut.exe` in versioned local/program directories), and OBSBOT Center (`OBSBOT_Main.exe` or `OBSBOT_Center.exe`). It never chooses arbitrary uninstallers/updaters as clone launchers. Unknown Win32 entries offer **Locate executable…** instead of a permanently disabled button, while host plug-ins such as Advanced Scene Switcher are identified as non-standalone software.
-
-**macOS:** App bundles already discovered in `/Applications`, `/System/Applications`, and `~/Applications` are additionally classified as Mac App Store apps when an `_MASReceipt/receipt` file exists in the bundle. These entries show **Open app**, which uses standard macOS application activation, not cloning or new App Store credentials. Receipt detection is a heuristic and doesn't prove current license validity. Apps without receipts may still have come from the App Store. The existing `.app` discovery remains available.
-
-**Limitations:** AppX/MSIX enumeration is for packages registered to the current Windows user and with a visible Start-app launcher, not all system components. A missing or restricted PowerShell source falls back to Win32 discovery; no package modifications occur. Store apps remain manual-review/non-cloneable through direct file copying. Other desktop apps may require services, drivers, vendor-specific adapters, or authentication. CI verifies code and artifact builds, not Store launch behavior on your personal PC.
-
-## v0.5.3 — Search toolbar alignment
-
-The Discover apps search input and Rescan control share a 35-point control height and align along the top edge of the same row. Search text and magnifying-glass icon use compact, cross-centered egui row geometry rather than the previously oversized inner TextEdit.
-
-The change is limited to UI layout. Application discovery, Store inventory, cloning and saved profiles remain unchanged.
-
-## Diagnostics, About and Support Development (v0.5.4)
-
-**Debug logs:** a dedicated sidebar page presents a real, local event history for discovery, preflight, clone creation/cancellation, managed process launch/stop, and instance rename/duplicate/backup/restore/delete. Events are categorized, timestamped, and filtered by severity or text. The page reports event/error counts and allows copying a sanitized report, choosing a destination for manual text export, and clearing the log with confirmation. Events are saved as local JSONL under the SoftClone application data directory, with a 128 KiB active log limit and one rotated file. An in-memory view is capped at 500 entries.
-
-**Privacy:** diagnostics use only fixed event codes and timestamps; no executable paths, profile contents, file names, user names, account credentials, tokens or arbitrary error strings are recorded. Logs are never uploaded or transmitted by SoftClone. Export is explicitly initiated by the user. This is operational history, not a complete operating-system trace or crash dump.
-
-**About:** a separate About SoftClone page displays package version, platform, license information, source repository and local data folder action. The previous How it works guide remains available.
-
-**Optional donation:** Support Development opens the user's Ko-fi page at https://ko-fi.com/rudycity using a normal external browser link. No donation is necessary to use SoftClone, and the app never processes payment information.
-
-Tests cover diagnostic persistence, severity filtering, bounded history, cleared files and corrupted-line handling. The release workflow still requires Windows/macOS/Linux checks and build artifacts from the same commit.
+See [architecture](docs/architecture.md), [design system](docs/design-system.md) and [Tauri migration notes](docs/releases/v0.6.0.md).
