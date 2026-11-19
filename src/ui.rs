@@ -1,7 +1,7 @@
+use crate::icons::{self, Icon};
 use eframe::egui::{
     self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, TextEdit, Vec2,
 };
-use crate::icons::{self, Icon};
 use softclone::{
     core::{self, CloneRecord, CloneRequest, RunMode},
     registry, rune_engine,
@@ -177,10 +177,20 @@ impl DesktopApp {
                 if Self::nav_button(ui, Icon::Copy, "My clones", self.page == Page::Library) {
                     self.page = Page::Library;
                 }
-                if Self::nav_button(ui, Icon::SquarePlus, "Create clone", self.page == Page::Create) {
+                if Self::nav_button(
+                    ui,
+                    Icon::SquarePlus,
+                    "Create clone",
+                    self.page == Page::Create,
+                ) {
                     self.page = Page::Create;
                 }
-                if Self::nav_button(ui, Icon::ScanSearch, "Discover apps", self.page == Page::Discover) {
+                if Self::nav_button(
+                    ui,
+                    Icon::ScanSearch,
+                    "Discover apps",
+                    self.page == Page::Discover,
+                ) {
                     self.page = Page::Discover;
                     if self.discovered.is_empty() {
                         self.start_discovery();
@@ -215,8 +225,7 @@ impl DesktopApp {
     }
 
     fn nav_button(ui: &mut egui::Ui, icon: Icon, label: &str, active: bool) -> bool {
-        let (rect, response) =
-            ui.allocate_exact_size(Vec2::new(184.0, 42.0), egui::Sense::click());
+        let (rect, response) = ui.allocate_exact_size(Vec2::new(184.0, 42.0), egui::Sense::click());
         let fill = if active {
             Color32::from_rgb(46, 76, 75)
         } else if response.hovered() {
@@ -656,7 +665,7 @@ impl eframe::App for DesktopApp {
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             icons::inline(ui, Icon::HardDrive, 15.0, ACCENT);
-                    ui.label(RichText::new("LOCAL").color(ACCENT).size(11.0).strong());
+                            ui.label(RichText::new("LOCAL").color(ACCENT).size(11.0).strong());
                         });
                     });
                     ui.add_space(20.0);
@@ -671,7 +680,20 @@ impl eframe::App for DesktopApp {
                             .inner_margin(13)
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    icons::inline(ui, if is_error { Icon::CircleAlert } else { Icon::CheckCircle }, 17.0, if is_error { Color32::from_rgb(160, 62, 48) } else { ACCENT });
+                                    icons::inline(
+                                        ui,
+                                        if is_error {
+                                            Icon::CircleAlert
+                                        } else {
+                                            Icon::CheckCircle
+                                        },
+                                        17.0,
+                                        if is_error {
+                                            Color32::from_rgb(160, 62, 48)
+                                        } else {
+                                            ACCENT
+                                        },
+                                    );
                                     ui.label(RichText::new(message).size(12.5).color(
                                         if is_error {
                                             Color32::from_rgb(160, 62, 48)

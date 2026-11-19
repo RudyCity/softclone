@@ -28,9 +28,12 @@ pub fn inline(ui: &mut Ui, icon: Icon, size: f32, color: Color32) -> Response {
 
 pub fn button(ui: &mut Ui, icon: Icon, label: &str, accent: Option<Color32>) -> Response {
     let width = 43.0 + label.chars().count() as f32 * 7.3;
-    let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(width, 35.0), Sense::click());
-    let color = if accent.is_some() { Color32::WHITE } else { Color32::from_rgb(56, 67, 72) };
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 35.0), Sense::click());
+    let color = if accent.is_some() {
+        Color32::WHITE
+    } else {
+        Color32::from_rgb(56, 67, 72)
+    };
     let background = accent.unwrap_or(if response.hovered() {
         Color32::from_rgb(231, 238, 235)
     } else {
@@ -40,15 +43,25 @@ pub fn button(ui: &mut Ui, icon: Icon, label: &str, accent: Option<Color32>) -> 
     painter.rect_filled(rect, egui::CornerRadius::same(8), background);
     if accent.is_none() {
         painter.rect_stroke(
-            rect, egui::CornerRadius::same(8),
-            Stroke::new(1.0, Color32::from_rgb(219, 228, 225)), StrokeKind::Inside,
+            rect,
+            egui::CornerRadius::same(8),
+            Stroke::new(1.0, Color32::from_rgb(219, 228, 225)),
+            StrokeKind::Inside,
         );
     }
-    draw(painter, icon, egui::pos2(rect.left() + 18.0, rect.center().y), 16.0, color);
+    draw(
+        painter,
+        icon,
+        egui::pos2(rect.left() + 18.0, rect.center().y),
+        16.0,
+        color,
+    );
     painter.text(
         egui::pos2(rect.left() + 33.0, rect.center().y),
-        egui::Align2::LEFT_CENTER, label,
-        egui::FontId::proportional(12.5), color,
+        egui::Align2::LEFT_CENTER,
+        label,
+        egui::FontId::proportional(12.5),
+        color,
     );
     response
 }
@@ -77,13 +90,28 @@ pub fn draw(painter: &egui::Painter, icon: Icon, center: Pos2, size: f32, color:
     };
     match icon {
         Icon::Layers => {
-            line(&[(3.0, 9.0), (12.0, 4.0), (21.0, 9.0), (12.0, 14.0), (3.0, 9.0)]);
+            line(&[
+                (3.0, 9.0),
+                (12.0, 4.0),
+                (21.0, 9.0),
+                (12.0, 14.0),
+                (3.0, 9.0),
+            ]);
             line(&[(3.0, 13.0), (12.0, 18.0), (21.0, 13.0)]);
             line(&[(3.0, 17.0), (12.0, 22.0), (21.0, 17.0)]);
         }
         Icon::Copy => {
             rect(8.0, 8.0, 13.0, 13.0, 2);
-            line(&[(5.0, 17.0), (4.0, 17.0), (3.0, 16.0), (3.0, 4.0), (4.0, 3.0), (16.0, 3.0), (17.0, 4.0), (17.0, 5.0)]);
+            line(&[
+                (5.0, 17.0),
+                (4.0, 17.0),
+                (3.0, 16.0),
+                (3.0, 4.0),
+                (4.0, 3.0),
+                (16.0, 3.0),
+                (17.0, 4.0),
+                (17.0, 5.0),
+            ]);
         }
         Icon::SquarePlus => {
             rect(3.0, 3.0, 18.0, 18.0, 3);
@@ -112,14 +140,40 @@ pub fn draw(painter: &egui::Painter, icon: Icon, center: Pos2, size: f32, color:
             line(&[(8.0, 5.0), (19.0, 12.0), (8.0, 19.0), (8.0, 5.0)]);
         }
         Icon::FolderOpen => {
-            line(&[(3.0, 18.0), (3.0, 6.0), (10.0, 6.0), (12.0, 9.0), (20.0, 9.0), (20.0, 12.0)]);
-            line(&[(3.0, 18.0), (6.0, 13.0), (22.0, 13.0), (19.0, 20.0), (5.0, 20.0), (3.0, 18.0)]);
+            line(&[
+                (3.0, 18.0),
+                (3.0, 6.0),
+                (10.0, 6.0),
+                (12.0, 9.0),
+                (20.0, 9.0),
+                (20.0, 12.0),
+            ]);
+            line(&[
+                (3.0, 18.0),
+                (6.0, 13.0),
+                (22.0, 13.0),
+                (19.0, 20.0),
+                (5.0, 20.0),
+                (3.0, 18.0),
+            ]);
         }
         Icon::RefreshCw => {
             line(&[(20.0, 7.0), (20.0, 3.0), (16.0, 3.0)]);
-            line(&[(20.0, 7.0), (17.0, 5.0), (13.0, 4.0), (9.0, 5.0), (6.0, 8.0)]);
+            line(&[
+                (20.0, 7.0),
+                (17.0, 5.0),
+                (13.0, 4.0),
+                (9.0, 5.0),
+                (6.0, 8.0),
+            ]);
             line(&[(4.0, 17.0), (4.0, 21.0), (8.0, 21.0)]);
-            line(&[(4.0, 17.0), (7.0, 19.0), (11.0, 20.0), (15.0, 19.0), (18.0, 16.0)]);
+            line(&[
+                (4.0, 17.0),
+                (7.0, 19.0),
+                (11.0, 20.0),
+                (15.0, 19.0),
+                (18.0, 16.0),
+            ]);
         }
         Icon::Search => {
             circle(10.5, 10.5, 6.5);
@@ -127,7 +181,13 @@ pub fn draw(painter: &egui::Painter, icon: Icon, center: Pos2, size: f32, color:
         }
         Icon::UserRoundCheck => {
             circle(9.0, 8.0, 4.0);
-            line(&[(2.0, 21.0), (2.0, 18.0), (4.0, 15.0), (9.0, 14.0), (13.0, 15.0)]);
+            line(&[
+                (2.0, 21.0),
+                (2.0, 18.0),
+                (4.0, 15.0),
+                (9.0, 14.0),
+                (13.0, 15.0),
+            ]);
             line(&[(15.0, 18.0), (18.0, 21.0), (23.0, 15.0)]);
         }
         Icon::AlertTriangle => {
@@ -136,7 +196,15 @@ pub fn draw(painter: &egui::Painter, icon: Icon, center: Pos2, size: f32, color:
             painter.circle_filled(at(12.0, 17.0), 1.0 * scale, color);
         }
         Icon::Package => {
-            line(&[(12.0, 2.0), (21.0, 7.0), (21.0, 17.0), (12.0, 22.0), (3.0, 17.0), (3.0, 7.0), (12.0, 2.0)]);
+            line(&[
+                (12.0, 2.0),
+                (21.0, 7.0),
+                (21.0, 17.0),
+                (12.0, 22.0),
+                (3.0, 17.0),
+                (3.0, 7.0),
+                (12.0, 2.0),
+            ]);
             line(&[(3.0, 7.0), (12.0, 12.0), (21.0, 7.0)]);
             line(&[(12.0, 12.0), (12.0, 22.0)]);
         }

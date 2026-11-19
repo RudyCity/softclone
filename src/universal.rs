@@ -102,7 +102,11 @@ fn candidate(name: String, path: PathBuf, installed: bool) -> DiscoveredApp {
     DiscoveredApp {
         name,
         launchable: path.exists(),
-        origin: if installed { "Installed application" } else { "Portable application" },
+        origin: if installed {
+            "Installed application"
+        } else {
+            "Portable application"
+        },
         path,
         support,
         note: note.into(),
@@ -115,7 +119,10 @@ fn add(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>, item: Discove
         return;
     }
     if seen.contains(&identity) {
-        if let Some(existing) = items.iter_mut().find(|app| app.name.eq_ignore_ascii_case(&item.name)) {
+        if let Some(existing) = items
+            .iter_mut()
+            .find(|app| app.name.eq_ignore_ascii_case(&item.name))
+        {
             if !existing.launchable && item.launchable {
                 *existing = item;
             }
