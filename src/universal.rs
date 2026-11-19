@@ -199,7 +199,129 @@ pub fn first_exec_token(exec_line: &str) -> Option<String> {
         }
     }
     let executable = tokens.get(offset)?;
-    if executable.contains(['$', ';', '|', '&', '<', '>', '%', '\n', '\r'])
+    if executable.chars().any(|c| matches!(c, '
+        || ["sh", "bash", "zsh", "flatpak", "snap", "pkexec", "sudo"]
+            .contains(&executable.as_str())
+    { return None; }
+    Some(executable.clone())
+}
+
+pub fn parse_desktop_file(content: &str) -> Option<(String, String)> {
+    let mut section = String::new();
+    let mut name = None;
+    let mut exec = None;
+    let mut visible = true;
+    let mut app = true;
+    for line in content.lines().take(1500) {
+        let line = line.trim();
+        if line.starts_with('#') || line.is_empty() { continue; }
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line.to_string(); continue;
+        }
+        if section != "[Desktop Entry]" { continue; }
+        let Some((key, value)) = line.split_once('=') else { continue };
+        match key {
+            "Name" => name = Some(value.trim().to_string()),
+            "Exec" => exec = Some(value.trim().to_string()),
+            "Hidden" | "NoDisplay" if value.eq_ignore_ascii_case("true") => visible = false,
+            "Type" if value != "Application" => app = false,
+            "Terminal" if value.eq_ignore_ascii_case("true") => visible = false,
+            _ => {}
+        }
+    }
+    if !visible || !app { return None; }
+    Some((name?, first_exec_token(&exec?)?))
+}
+
+fn resolve_binary(binary: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(binary);
+    if path.is_absolute() {
+        return fs::canonicalize(path).ok().filter(|p| p.is_file());
+    }
+    if path.components().count() != 1 { return None; }
+    let path_dirs = env::var_os("PATH")?;
+    for dir in env::split_paths(&path_dirs) {
+        let executable = dir.join(binary);
+        if let Ok(p) = fs::canonicalize(executable) {
+            if p.is_file() { return Some(p); }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn linux_apps(items: &mut Vec<DiscoveredApp>, seen: &mut HashSet<String>) {
+    let mut roots = vec![PathBuf::from("/usr/share/applications"), PathBuf::from("/usr/local/share/applications")];
+    if let Some(home) = dirs::home_dir() {
+        roots.push(home.join(".local/share/applications"));
+    }
+    for root in roots {
+        let Ok(entries) = fs::read_dir(root) else { continue };
+        for entry in entries.flatten().take(700) {
+            let path = entry.path();
+            if path.extension().is_none_or(|ext| ext != "desktop") { continue; }
+            let Ok(meta) = fs::metadata(&path) else { continue };
+            if meta.len() > 64 * 1024 { continue; }
+            let Ok(content) = fs::read_to_string(&path) else { continue };
+            let Some((name, binary)) = parse_desktop_file(&content) else { continue };
+            let Some(executable) = resolve_binary(&binary) else { continue };
+            add(items, seen, candidate(name, executable, true));
+        }
+    }
+    if let Ok(entries) = fs::read_dir("/opt") {
+        for entry in entries.flatten().take(200) {
+            let dir = entry.path();
+            if !dir.is_dir() { continue; }
+            if let Ok(sub) = fs::read_dir(dir) {
+                for file in sub.flatten().take(80) {
+                    let path = file.path();
+                    if path.is_file() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("AppImage")) {
+                        let title = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+                        add(items, seen, candidate(title, path, false));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Read-only local discovery. Results explicitly indicate support limitations.
+pub fn discover_apps() -> Vec<DiscoveredApp> {
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+    #[cfg(target_os = "windows")]
+    windows_apps(&mut items, &mut seen);
+    #[cfg(target_os = "macos")]
+    macos_apps(&mut items, &mut seen);
+    #[cfg(target_os = "linux")]
+    linux_apps(&mut items, &mut seen);
+    items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn known_browsers_use_profiles() {
+        assert_eq!(adapter_for(Path::new("chrome.exe")), Some(Adapter::Chromium));
+        assert_eq!(adapter_for(Path::new("/Applications/Firefox.app")), Some(Adapter::Firefox));
+        assert_eq!(adapter_for(Path::new("random.exe")), None);
+        assert_eq!(adapter_args(Path::new("random.exe"), Path::new("/tmp/a")).len(), 0);
+        let args = adapter_args(Path::new("firefox"), Path::new("/tmp/a"));
+        assert_eq!(args[0], "-no-remote");
+    }
+    #[test]
+    fn extracts_desktop_entry_without_shell() {
+        let desktop = "[Desktop Entry]\nType=Application\nName=My Browser\nExec=/usr/bin/google-chrome --new-window %U\n";
+        assert_eq!(parse_desktop_file(desktop), Some(("My Browser".into(), "/usr/bin/google-chrome".into())));
+        assert_eq!(first_exec_token("env VAR=1 /usr/bin/firefox %u"), Some("/usr/bin/firefox".into()));
+        assert!(first_exec_token("sh -c 'echo hi'").is_none());
+        assert!(first_exec_token("flatpak run org.example.App").is_none());
+        assert!(parse_desktop_file("[Desktop Entry]\nHidden=true\nName=X\nExec=foo\n").is_none());
+    }
+}
+ | ';' | '|' | '&' | '<' | '>' | '%' | '\n' | '\r'))
         || ["sh", "bash", "zsh", "flatpak", "snap", "pkexec", "sudo"]
             .contains(&executable.as_str())
     { return None; }
