@@ -2,7 +2,7 @@
 use super::fields;
 use crate::icons::{self, Icon};
 use eframe::egui::{self, Color32, Frame, Label, RichText, Ui};
-use softclone::{rune_engine, universal};
+use softclone::{core::{CopyPlan, CopyProgress}, rune_engine, universal};
 use std::path::Path;
 
 pub struct CreateForm<'a> {
@@ -13,11 +13,17 @@ pub struct CreateForm<'a> {
     pub profile_only: &'a mut bool,
     pub next_label_number: i64,
     pub creating: bool,
+    pub analyzing: bool,
+    pub analysis: Option<&'a CopyPlan>,
+    pub progress: Option<&'a CopyProgress>,
+    pub cancellation_requested: bool,
 }
 
 #[derive(Default)]
 pub struct CreateFormAction {
     pub submit: bool,
+    pub analyze: bool,
+    pub cancel: bool,
     pub browse_file: bool,
     pub browse_folder: bool,
     pub error: Option<String>,
@@ -41,7 +47,9 @@ impl CreateForm<'_> {
                 fields::divider(ui);
                 self.strategy_section(ui);
                 fields::divider(ui);
-                action.submit = self.actions(ui);
+                self.preflight_section(ui, &mut action);
+                fields::divider(ui);
+                self.actions(ui, &mut action);
                 action
             })
             .inner
@@ -129,7 +137,48 @@ impl CreateForm<'_> {
         }
     }
 
-    fn actions(&self, ui: &mut Ui) -> bool {
+    fn preflight_section(&self, ui: &mut Ui, action: &mut CreateFormAction) {
+        fields::section(ui, "04", "PREFLIGHT CHECK");
+        fields::helper(
+            ui,
+            "Inspect the selected source before copying. File counts and sizes are estimates; files can change before or during the clone.",
+        );
+        let source_ready = !self.source.trim().is_empty() && !self.name.trim().is_empty();
+        if self.analyzing {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new().size(16.0));
+                ui.label(RichText::new("Analyzing source safely…").color(fields::ACCENT));
+            });
+        } else if !self.creating {
+            action.analyze = ui
+                .add_enabled_ui(source_ready, |ui| {
+                    icons::button(ui, Icon::Search, "Analyze source", None)
+                })
+                .inner
+                .clicked();
+        }
+        if let Some(plan) = self.analysis {
+            if *self.profile_only {
+                ui.label(
+                    RichText::new("Installed profile: no application binary copy required.")
+                        .color(fields::ACCENT)
+                        .strong(),
+                );
+            } else {
+                ui.label(
+                    RichText::new(format!(
+                        "Estimated copy: {} files · {}",
+                        plan.total_files,
+                        format_size(plan.total_bytes)
+                    ))
+                    .color(fields::ACCENT)
+                    .strong(),
+                );
+            }
+        }
+    }
+
+    fn actions(&self, ui: &mut Ui, action: &mut CreateFormAction) {
         ui.add(
             Label::new(
                 RichText::new(
@@ -142,29 +191,75 @@ impl CreateForm<'_> {
         );
         ui.add_space(8.0);
         if self.creating {
-            ui.horizontal(|ui| {
-                ui.add(egui::Spinner::new().size(18.0));
-                ui.label(
-                    RichText::new("Preparing instance…")
-                        .color(fields::ACCENT)
-                        .size(12.0),
+            if let Some(progress) = self.progress {
+                let fraction = if progress.total_bytes == 0 {
+                    0.0
+                } else {
+                    (progress.copied_bytes as f64 / progress.total_bytes as f64)
+                        .clamp(0.0, 1.0) as f32
+                };
+                ui.add(
+                    egui::ProgressBar::new(fraction)
+                        .show_percentage()
+                        .animate(true)
+                        .desired_width(ui.available_width().min(590.0)),
                 );
-            });
-            false
+                fields::helper(
+                    ui,
+                    &format!(
+                        "{} of {} · {} / {} files · {}",
+                        format_size(progress.copied_bytes),
+                        format_size(progress.total_bytes),
+                        progress.completed_files,
+                        progress.total_files,
+                        progress.current_file,
+                    ),
+                );
+            } else {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Spinner::new().size(18.0));
+                    ui.label(RichText::new("Preparing instance…").color(fields::ACCENT));
+                });
+            }
+            action.cancel = ui
+                .add_enabled(
+                    !self.cancellation_requested,
+                    egui::Button::new(if self.cancellation_requested {
+                        "Cancellation requested…"
+                    } else {
+                        "Cancel and remove temporary files"
+                    }),
+                )
+                .clicked();
         } else {
             let ready = !self.source.trim().is_empty() && !self.name.trim().is_empty();
-            let response = ui
-                .add_enabled_ui(ready, |ui| {
+            action.submit = ui
+                .add_enabled_ui(ready && !self.analyzing, |ui| {
                     icons::button(ui, Icon::SquarePlus, "Create clone", Some(fields::ACCENT))
                 })
-                .inner;
+                .inner
+                .clicked();
             if !ready {
                 fields::helper(
                     ui,
                     "Enter an application path and a clone name to continue.",
                 );
             }
-            response.clicked()
         }
+    }
+}
+
+fn format_size(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+    let mut n = bytes as f64;
+    let mut unit = 0;
+    while n >= 1024.0 && unit < UNITS.len() - 1 {
+        n /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{n:.1} {}", UNITS[unit])
     }
 }
