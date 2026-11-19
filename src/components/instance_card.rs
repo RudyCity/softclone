@@ -10,6 +10,7 @@ pub enum Action {
     Restart,
     OpenFolder,
     Rename,
+    Duplicate,
     Backup,
     Restore,
     Delete,
@@ -99,6 +100,7 @@ pub fn show(
                 }
                 choose(Action::OpenFolder, Icon::FolderOpen, "Folder", None);
                 choose(Action::Rename, Icon::Info, "Rename", None);
+                choose(Action::Duplicate, Icon::Copy, "Duplicate", None);
                 choose(Action::Backup, Icon::Package, "Backup", None);
                 choose(Action::Restore, Icon::RefreshCw, "Restore", None);
                 choose(Action::Delete, Icon::AlertTriangle, "Delete", None);
