@@ -33,7 +33,9 @@ struct Inner {
 struct Desktop(Arc<Inner>);
 
 fn guard<T>(mutex: &Mutex<T>) -> DesktopResult<MutexGuard<'_, T>> {
-    mutex.lock().map_err(|_| "Internal state lock was poisoned.".to_string())
+    mutex
+        .lock()
+        .map_err(|_| "Internal state lock was poisoned.".to_string())
 }
 
 impl Desktop {
@@ -110,8 +112,8 @@ struct InstanceView {
 async fn list_instances(state: State<'_, Desktop>) -> DesktopResult<Vec<InstanceView>> {
     let app = state.inner().clone();
     blocking(move || {
-        let records = registry::load(&registry::registry_file())
-            .map_err(|error| error.to_string())?;
+        let records =
+            registry::load(&registry::registry_file()).map_err(|error| error.to_string())?;
         let mut children = guard(&app.0.children)?;
         records
             .into_iter()
@@ -384,11 +386,7 @@ async fn stop_instance(state: State<'_, Desktop>, id: Uuid) -> DesktopResult<()>
 }
 
 #[tauri::command]
-async fn rename_instance(
-    state: State<'_, Desktop>,
-    id: Uuid,
-    name: String,
-) -> DesktopResult<()> {
+async fn rename_instance(state: State<'_, Desktop>, id: Uuid, name: String) -> DesktopResult<()> {
     let app = state.inner().clone();
     blocking(move || {
         let _exclusive = guard(&app.0.mutation)?;
@@ -509,12 +507,9 @@ async fn delete_instance(state: State<'_, Desktop>, id: Uuid) -> DesktopResult<(
         let item = record(id)?;
         must_be_stopped(&app.0, id)?;
         app.log(Event::ManagerDeleteStarted);
-        let result = instance_manager::delete(
-            &item,
-            &registry::library_dir(),
-            &registry::registry_file(),
-        )
-        .map_err(|error| error.to_string());
+        let result =
+            instance_manager::delete(&item, &registry::library_dir(), &registry::registry_file())
+                .map_err(|error| error.to_string());
         app.log(if result.is_ok() {
             Event::ManagerCompleted
         } else {
@@ -539,8 +534,7 @@ async fn open_instance_folder(state: State<'_, Desktop>, id: Uuid) -> DesktopRes
 #[tauri::command]
 async fn open_data_folder() -> DesktopResult<()> {
     blocking(move || {
-        std::fs::create_dir_all(registry::app_data_dir())
-            .map_err(|error| error.to_string())?;
+        std::fs::create_dir_all(registry::app_data_dir()).map_err(|error| error.to_string())?;
         core::open_folder(&registry::app_data_dir()).map_err(|error| error.to_string())
     })
     .await
@@ -687,3 +681,4 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("Could not start SoftClone desktop");
 }
+
