@@ -1,8 +1,9 @@
-use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, TextEdit, Vec2};
+use eframe::egui::{
+    self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, TextEdit, Vec2,
+};
 use softclone::{
     core::{self, CloneRecord, CloneRequest},
-    registry,
-    rune_engine,
+    registry, rune_engine,
 };
 use std::{
     path::{Path, PathBuf},
@@ -20,7 +21,11 @@ const NAV: Color32 = Color32::from_rgb(22, 38, 42);
 const WHITE: Color32 = Color32::WHITE;
 
 #[derive(Clone, Copy, PartialEq)]
-enum Page { Library, Create, About }
+enum Page {
+    Library,
+    Create,
+    About,
+}
 
 pub struct DesktopApp {
     page: Page,
@@ -47,13 +52,21 @@ impl DesktopApp {
         cc.egui_ctx.set_style(style);
         let (items, notice) = match registry::load(&registry::registry_file()) {
             Ok(items) => (items, None),
-            Err(e) => (vec![], Some((format!("Cannot read clone registry: {e}"), true))),
+            Err(e) => (
+                vec![],
+                Some((format!("Cannot read clone registry: {e}"), true)),
+            ),
         };
         Self {
             page: Page::Library,
-            items, selected: None,
-            source: String::new(), name: String::new(), entrypoint: String::new(),
-            isolated: true, worker: None, notice,
+            items,
+            selected: None,
+            source: String::new(),
+            name: String::new(),
+            entrypoint: String::new(),
+            isolated: true,
+            worker: None,
+            notice,
         }
     }
 
@@ -78,13 +91,20 @@ impl DesktopApp {
                     self.notice = Some(("Clone worker stopped unexpectedly.".into(), true));
                     self.worker = None;
                 }
-                Err(mpsc::TryRecvError::Empty) => ctx.request_repaint_after(Duration::from_millis(120)),
+                Err(mpsc::TryRecvError::Empty) => {
+                    ctx.request_repaint_after(Duration::from_millis(120))
+                }
             }
         }
     }
 
     fn headline(ui: &mut egui::Ui, eyebrow: &str, title: &str, description: &str) {
-        ui.label(RichText::new(eyebrow.to_uppercase()).color(ACCENT).size(11.0).strong());
+        ui.label(
+            RichText::new(eyebrow.to_uppercase())
+                .color(ACCENT)
+                .size(11.0)
+                .strong(),
+        );
         ui.add_space(4.0);
         ui.label(RichText::new(title).color(INK).size(31.0).strong());
         ui.add_space(3.0);
@@ -100,13 +120,26 @@ impl DesktopApp {
             .show(ctx, |ui| {
                 ui.add_space(16.0);
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("◧").color(Color32::from_rgb(129, 200, 177)).size(28.0));
+                    ui.label(
+                        RichText::new("◧")
+                            .color(Color32::from_rgb(129, 200, 177))
+                            .size(28.0),
+                    );
                     ui.label(RichText::new("softclone").color(WHITE).size(23.0).strong());
                 });
                 ui.add_space(5.0);
-                ui.label(RichText::new("YOUR APPS. YOUR SPACE.").color(Color32::from_rgb(153, 169, 169)).size(10.0));
+                ui.label(
+                    RichText::new("YOUR APPS. YOUR SPACE.")
+                        .color(Color32::from_rgb(153, 169, 169))
+                        .size(10.0),
+                );
                 ui.add_space(54.0);
-                ui.label(RichText::new("WORKSPACE").color(Color32::from_rgb(125, 147, 149)).size(10.0).strong());
+                ui.label(
+                    RichText::new("WORKSPACE")
+                        .color(Color32::from_rgb(125, 147, 149))
+                        .size(10.0)
+                        .strong(),
+                );
                 ui.add_space(8.0);
                 if Self::nav_button(ui, "▦   My clones", self.page == Page::Library) {
                     self.page = Page::Library;
@@ -115,32 +148,64 @@ impl DesktopApp {
                     self.page = Page::Create;
                 }
                 ui.add_space(24.0);
-                ui.label(RichText::new("PREFERENCES").color(Color32::from_rgb(125, 147, 149)).size(10.0).strong());
+                ui.label(
+                    RichText::new("PREFERENCES")
+                        .color(Color32::from_rgb(125, 147, 149))
+                        .size(10.0)
+                        .strong(),
+                );
                 ui.add_space(8.0);
                 if Self::nav_button(ui, "ⓘ   How it works", self.page == Page::About) {
                     self.page = Page::About;
                 }
                 ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
-                    ui.label(RichText::new("VERSION 0.1.0  •  LOCAL FIRST").size(10.0).color(Color32::from_rgb(133, 154, 155)));
+                    ui.label(
+                        RichText::new("VERSION 0.1.0  •  LOCAL FIRST")
+                            .size(10.0)
+                            .color(Color32::from_rgb(133, 154, 155)),
+                    );
                     ui.add_space(10.0);
                     ui.separator();
-                    ui.label(RichText::new("No account. No cloud sync.").size(11.0).color(Color32::from_rgb(157, 175, 176)));
+                    ui.label(
+                        RichText::new("No account. No cloud sync.")
+                            .size(11.0)
+                            .color(Color32::from_rgb(157, 175, 176)),
+                    );
                 });
             });
     }
 
     fn nav_button(ui: &mut egui::Ui, label: &str, active: bool) -> bool {
-        let fill = if active { Color32::from_rgb(46, 76, 75) } else { NAV };
+        let fill = if active {
+            Color32::from_rgb(46, 76, 75)
+        } else {
+            NAV
+        };
         ui.add_sized(
             [184.0, 42.0],
-            egui::Button::new(RichText::new(label).color(if active { WHITE } else { Color32::from_rgb(183, 200, 201) }).size(13.5))
-                .fill(fill).stroke(Stroke::NONE).corner_radius(7),
-        ).clicked()
+            egui::Button::new(
+                RichText::new(label)
+                    .color(if active {
+                        WHITE
+                    } else {
+                        Color32::from_rgb(183, 200, 201)
+                    })
+                    .size(13.5),
+            )
+            .fill(fill)
+            .stroke(Stroke::NONE)
+            .corner_radius(7),
+        )
+        .clicked()
     }
 
     fn stat(ui: &mut egui::Ui, value: &str, label: &str) {
-        Frame::new().fill(WHITE).stroke(Stroke::new(1.0, LINE))
-            .corner_radius(12).inner_margin(20).show(ui, |ui| {
+        Frame::new()
+            .fill(WHITE)
+            .stroke(Stroke::new(1.0, LINE))
+            .corner_radius(12)
+            .inner_margin(20)
+            .show(ui, |ui| {
                 ui.set_min_width(180.0);
                 ui.label(RichText::new(value).size(28.0).color(INK).strong());
                 ui.label(RichText::new(label).color(MUTED).size(12.0));
@@ -148,19 +213,38 @@ impl DesktopApp {
     }
 
     fn library(&mut self, ui: &mut egui::Ui) {
-        Self::headline(ui, "Workspace overview", "Your clone library",
-            "Independent copies, managed in one quiet place.");
+        Self::headline(
+            ui,
+            "Workspace overview",
+            "Your clone library",
+            "Independent copies, managed in one quiet place.",
+        );
         ui.horizontal(|ui| {
             Self::stat(ui, &self.items.len().to_string(), "Total clones");
             let bytes: u64 = self.items.iter().map(|x| x.copied_bytes).sum();
             Self::stat(ui, &format_size(bytes), "Copied files");
-            Self::stat(ui, &self.items.iter().filter(|x| x.isolated_profile).count().to_string(), "Separate profiles");
+            Self::stat(
+                ui,
+                &self
+                    .items
+                    .iter()
+                    .filter(|x| x.isolated_profile)
+                    .count()
+                    .to_string(),
+                "Separate profiles",
+            );
         });
         ui.add_space(30.0);
         ui.horizontal(|ui| {
             ui.label(RichText::new("Applications").color(INK).size(19.0).strong());
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui.add(egui::Button::new(RichText::new("+  New clone").color(WHITE).strong()).fill(ACCENT)).clicked() {
+                if ui
+                    .add(
+                        egui::Button::new(RichText::new("+  New clone").color(WHITE).strong())
+                            .fill(ACCENT),
+                    )
+                    .clicked()
+                {
                     self.page = Page::Create;
                 }
             });
@@ -184,25 +268,59 @@ impl DesktopApp {
         }
         let cards = self.items.clone();
         for item in cards {
-            Frame::new().fill(WHITE).stroke(Stroke::new(1.0, LINE)).corner_radius(12)
-                .inner_margin(18).show(ui, |ui| {
+            Frame::new()
+                .fill(WHITE)
+                .stroke(Stroke::new(1.0, LINE))
+                .corner_radius(12)
+                .inner_margin(18)
+                .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        Frame::new().fill(Color32::from_rgb(232, 244, 238)).corner_radius(10)
-                            .inner_margin(12).show(ui, |ui| {
+                        Frame::new()
+                            .fill(Color32::from_rgb(232, 244, 238))
+                            .corner_radius(10)
+                            .inner_margin(12)
+                            .show(ui, |ui| {
                                 ui.label(RichText::new("◧").size(24.0).color(ACCENT));
                             });
                         ui.vertical(|ui| {
                             ui.label(RichText::new(&item.name).size(16.0).strong().color(INK));
-                            ui.label(RichText::new(format!("{}  ·  {}", format_size(item.copied_bytes),
-                                if item.isolated_profile { "Separate profile" } else { "Shared environment" }))
-                                .size(12.0).color(MUTED));
-                            ui.label(RichText::new(item.source.display().to_string()).size(11.0).color(MUTED));
+                            ui.label(
+                                RichText::new(format!(
+                                    "{}  ·  {}",
+                                    format_size(item.copied_bytes),
+                                    if item.isolated_profile {
+                                        "Separate profile"
+                                    } else {
+                                        "Shared environment"
+                                    }
+                                ))
+                                .size(12.0)
+                                .color(MUTED),
+                            );
+                            ui.label(
+                                RichText::new(item.source.display().to_string())
+                                    .size(11.0)
+                                    .color(MUTED),
+                            );
                         });
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui.add(egui::Button::new(RichText::new("Launch").color(WHITE).strong()).fill(ACCENT)).clicked() {
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new("Launch").color(WHITE).strong(),
+                                    )
+                                    .fill(ACCENT),
+                                )
+                                .clicked()
+                            {
                                 match core::launch(&item) {
-                                    Ok(_) => self.notice = Some((format!("Launched {}.", item.name), false)),
-                                    Err(e) => self.notice = Some((format!("Launch failed: {e}"), true)),
+                                    Ok(_) => {
+                                        self.notice =
+                                            Some((format!("Launched {}.", item.name), false))
+                                    }
+                                    Err(e) => {
+                                        self.notice = Some((format!("Launch failed: {e}"), true))
+                                    }
                                 }
                             }
                             if ui.button("Open folder").clicked() {
@@ -218,8 +336,12 @@ impl DesktopApp {
     }
 
     fn create(&mut self, ui: &mut egui::Ui) {
-        Self::headline(ui, "New instance", "Create an app clone",
-            "Choose local application files. The original stays exactly where it is.");
+        Self::headline(
+            ui,
+            "New instance",
+            "Create an app clone",
+            "Choose local application files. The original stays exactly where it is.",
+        );
         Frame::new().fill(WHITE).stroke(Stroke::new(1.0, LINE)).corner_radius(12)
             .inner_margin(26).show(ui, |ui| {
                 ui.set_max_width(760.0);
@@ -277,7 +399,9 @@ impl DesktopApp {
     }
 
     fn submit(&mut self) {
-        if self.worker.is_some() { return; }
+        if self.worker.is_some() {
+            return;
+        }
         let req = CloneRequest {
             source: PathBuf::from(self.source.trim()),
             name: self.name.clone(),
@@ -286,7 +410,10 @@ impl DesktopApp {
         };
         let prepared = match core::prepare(&req) {
             Ok(plan) => plan,
-            Err(e) => { self.notice = Some((format!("Check clone details: {e}"), true)); return; }
+            Err(e) => {
+                self.notice = Some((format!("Check clone details: {e}"), true));
+                return;
+            }
         };
         let library = registry::library_dir();
         let (tx, rx) = mpsc::channel();
@@ -295,8 +422,12 @@ impl DesktopApp {
             let result = core::create_clone(&prepared, &library)
                 .map_err(|e| e.to_string())
                 .and_then(|item| {
-                    registry::add(item.clone())
-                        .map_err(|e| format!("Files copied, but registry save failed: {e}. Location: {}", item.root.display()))?;
+                    registry::add(item.clone()).map_err(|e| {
+                        format!(
+                            "Files copied, but registry save failed: {e}. Location: {}",
+                            item.root.display()
+                        )
+                    })?;
                     Ok(item)
                 });
             let _ = tx.send(result);
@@ -304,8 +435,12 @@ impl DesktopApp {
     }
 
     fn about(&mut self, ui: &mut egui::Ui) {
-        Self::headline(ui, "A closer look", "How SoftClone works",
-            "Clear boundaries. Predictable behavior. Your data stays local.");
+        Self::headline(
+            ui,
+            "A closer look",
+            "How SoftClone works",
+            "Clear boundaries. Predictable behavior. Your data stays local.",
+        );
         let items = [
             ("01", "Copy the application", "Only the files you choose are copied to a unique instance folder. The source is not changed."),
             ("02", "Create a fresh profile", "Environment variables can direct supported applications toward per-clone config and cache directories. This is best effort."),
@@ -313,8 +448,12 @@ impl DesktopApp {
             ("04", "Keep control", "Browse each clone's files. Nothing is uploaded, and SoftClone never asks for administrator privileges."),
         ];
         for (number, title, detail) in items {
-            Frame::new().fill(WHITE).stroke(Stroke::new(1.0, LINE)).corner_radius(12)
-                .inner_margin(22).show(ui, |ui| {
+            Frame::new()
+                .fill(WHITE)
+                .stroke(Stroke::new(1.0, LINE))
+                .corner_radius(12)
+                .inner_margin(22)
+                .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(number).size(19.0).strong().color(ACCENT));
                         ui.vertical(|ui| {
@@ -326,7 +465,12 @@ impl DesktopApp {
             ui.add_space(10.0);
         }
         ui.add_space(14.0);
-        ui.label(RichText::new("NOT AN OS CONTAINER").size(11.0).color(ACCENT).strong());
+        ui.label(
+            RichText::new("NOT AN OS CONTAINER")
+                .size(11.0)
+                .color(ACCENT)
+                .strong(),
+        );
         ui.label(RichText::new("Software bound to the registry, keychain, machine identity, kernel drivers, services, DRM, or a single-instance lock may not work as a clone.").color(MUTED).size(13.0));
         ui.add_space(8.0);
         if ui.button("Open data directory").clicked() {
@@ -342,12 +486,20 @@ impl eframe::App for DesktopApp {
         self.tick_worker(ctx);
         self.sidebar(ctx);
         egui::CentralPanel::default()
-            .frame(Frame::new().fill(SURFACE).inner_margin(egui::Margin::same(32)))
+            .frame(
+                Frame::new()
+                    .fill(SURFACE)
+                    .inner_margin(egui::Margin::same(32)),
+            )
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.add_space(12.0);
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("SOFTCLONE  /  DESKTOP WORKSPACE").color(MUTED).size(11.0));
+                        ui.label(
+                            RichText::new("SOFTCLONE  /  DESKTOP WORKSPACE")
+                                .color(MUTED)
+                                .size(11.0),
+                        );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.label(RichText::new("● LOCAL").color(ACCENT).size(11.0).strong());
                         });
@@ -355,11 +507,25 @@ impl eframe::App for DesktopApp {
                     ui.add_space(20.0);
                     if let Some((message, is_error)) = self.notice.clone() {
                         Frame::new()
-                            .fill(if is_error { Color32::from_rgb(255, 240, 235) } else { Color32::from_rgb(229, 244, 236) })
-                            .corner_radius(9).inner_margin(13).show(ui, |ui| {
+                            .fill(if is_error {
+                                Color32::from_rgb(255, 240, 235)
+                            } else {
+                                Color32::from_rgb(229, 244, 236)
+                            })
+                            .corner_radius(9)
+                            .inner_margin(13)
+                            .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    ui.label(RichText::new(message).size(12.5).color(if is_error { Color32::from_rgb(160, 62, 48) } else { ACCENT }));
-                                    if ui.small_button("Dismiss").clicked() { self.notice = None; }
+                                    ui.label(RichText::new(message).size(12.5).color(
+                                        if is_error {
+                                            Color32::from_rgb(160, 62, 48)
+                                        } else {
+                                            ACCENT
+                                        },
+                                    ));
+                                    if ui.small_button("Dismiss").clicked() {
+                                        self.notice = None;
+                                    }
                                 });
                             });
                         ui.add_space(15.0);
@@ -383,6 +549,9 @@ fn format_size(bytes: u64) -> String {
         amount /= 1024.0;
         unit += 1;
     }
-    if unit == 0 { format!("{bytes} B") }
-    else { format!("{amount:.1} {}", SUFFIXES[unit]) }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{amount:.1} {}", SUFFIXES[unit])
+    }
 }

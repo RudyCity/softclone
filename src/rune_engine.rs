@@ -11,7 +11,8 @@ pub fn clone_label(base: &str, index: i64) -> Result<String, String> {
         .with_context(&context)
         .build_vm()
         .map_err(|e| e.to_string())?;
-    let output = vm.call(["clone_label"], (base.to_string(), index))
+    let output = vm
+        .call(["clone_label"], (base.to_string(), index))
         .map_err(|e| e.to_string())?;
     let label: String = rune::from_value(output).map_err(|e| e.to_string())?;
     crate::core::validate_name(&label).map_err(|e| e.to_string())

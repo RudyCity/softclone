@@ -1,20 +1,33 @@
 use crate::core::CloneRecord;
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 use uuid::Uuid;
 
 pub fn app_data_dir() -> PathBuf {
-    dirs::data_local_dir().unwrap_or_else(|| std::env::temp_dir().join("softclone-data")).join("SoftClone")
+    dirs::data_local_dir()
+        .unwrap_or_else(|| std::env::temp_dir().join("softclone-data"))
+        .join("SoftClone")
 }
-pub fn library_dir() -> PathBuf { app_data_dir().join("instances") }
-pub fn registry_file() -> PathBuf { app_data_dir().join("instances.json") }
+pub fn library_dir() -> PathBuf {
+    app_data_dir().join("instances")
+}
+pub fn registry_file() -> PathBuf {
+    app_data_dir().join("instances.json")
+}
 
 pub fn load(path: &Path) -> io::Result<Vec<CloneRecord>> {
-    if !path.exists() { return Ok(Vec::new()); }
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
     serde_json::from_slice(&fs::read(path)?).map_err(io::Error::other)
 }
 
 pub fn store(path: &Path, instances: &[CloneRecord]) -> io::Result<()> {
-    let parent = path.parent().ok_or_else(|| io::Error::other("Registry has no parent"))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::other("Registry has no parent"))?;
     fs::create_dir_all(parent)?;
     let tmp = parent.join(format!(".registry-{}.tmp", Uuid::new_v4()));
     let bytes = serde_json::to_vec_pretty(instances).map_err(io::Error::other)?;
@@ -26,16 +39,25 @@ pub fn store(path: &Path, instances: &[CloneRecord]) -> io::Result<()> {
                 let backup = parent.join(format!(".registry-{}.bak", Uuid::new_v4()));
                 fs::rename(path, &backup)?;
                 match fs::rename(&tmp, path) {
-                    Ok(()) => { let _ = fs::remove_file(backup); },
-                    Err(error) => { let _ = fs::rename(backup, path); return Err(error); }
+                    Ok(()) => {
+                        let _ = fs::remove_file(backup);
+                    }
+                    Err(error) => {
+                        let _ = fs::rename(backup, path);
+                        return Err(error);
+                    }
                 }
-            } else { fs::rename(&tmp, path)?; }
+            } else {
+                fs::rename(&tmp, path)?;
+            }
         }
         #[cfg(not(windows))]
         fs::rename(&tmp, path)?;
         Ok(())
     })();
-    if result.is_err() { let _ = fs::remove_file(tmp); }
+    if result.is_err() {
+        let _ = fs::remove_file(tmp);
+    }
     result
 }
 
