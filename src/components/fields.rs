@@ -7,6 +7,12 @@ pub const MUTED: Color32 = Color32::from_rgb(112, 123, 132);
 pub const ACCENT: Color32 = Color32::from_rgb(40, 105, 96);
 pub const BORDER: Color32 = Color32::from_rgb(221, 228, 225);
 
+// Match the shared icon-button height so search and Rescan align without
+// visual top/bottom drift at Windows DPI scaling.
+const SEARCH_TEXT_HEIGHT: f32 = 19.0;
+const SEARCH_PADDING_Y: i8 = 8;
+const SEARCH_CONTROL_HEIGHT: f32 = SEARCH_TEXT_HEIGHT + 2.0 * SEARCH_PADDING_Y as f32;
+
 pub fn helper(ui: &mut Ui, text: &str) {
     ui.add(Label::new(RichText::new(text).size(12.0).color(MUTED)).wrap());
 }
@@ -56,15 +62,16 @@ pub fn search_field(ui: &mut Ui, value: &mut String, width: f32) -> Response {
         .fill(Color32::WHITE)
         .stroke(Stroke::new(1.0_f32, BORDER))
         .corner_radius(9)
-        .inner_margin(egui::Margin::symmetric(12, 5))
+        .inner_margin(egui::Margin::symmetric(12, SEARCH_PADDING_Y))
         .show(ui, |ui| {
             ui.set_width(width - 24.0);
             ui.horizontal(|ui| {
                 icons::inline(ui, Icon::Search, 18.0, MUTED);
                 ui.add_sized(
-                    Vec2::new((width - 66.0).max(80.0), 28.0),
+                    Vec2::new((width - 66.0).max(80.0), SEARCH_TEXT_HEIGHT),
                     TextEdit::singleline(value)
                         .hint_text("Search installed applications")
+                        .align(egui::Align2::LEFT_CENTER)
                         .frame(false),
                 )
             })
@@ -81,5 +88,11 @@ mod tests {
     fn shared_form_palette_has_contrast() {
         assert_ne!(INK, MUTED);
         assert_ne!(ACCENT, BORDER);
+    }
+
+    #[test]
+    fn search_field_matches_rescan_button_height() {
+        // icons::button uses a 35pt control. Avoid center-shifted rows.
+        assert_eq!(SEARCH_CONTROL_HEIGHT, 35.0);
     }
 }

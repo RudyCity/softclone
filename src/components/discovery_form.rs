@@ -36,7 +36,7 @@ impl DiscoveryToolbar<'_> {
                 let available = ui.available_width();
                 let mut rescan = false;
                 if available >= 430.0 {
-                    ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::left_to_right(Align::Min), |ui| {
                         let width = (available - 132.0).clamp(145.0, 550.0);
                         fields::search_field(ui, self.query, width);
                         rescan = ui
