@@ -102,3 +102,8 @@ The desktop binary uses `src/diagnostics.rs` for privacy-safe operational loggin
 Key lifecycle activities in `DesktopApp` emit events at start/completion/failure of discovery, preflight, cloning, process management, and instance operations. Copy report writes plain sanitized text into the clipboard; Export report asks the user to choose a local destination. Clear logs uses a confirmation modal and removes both active and rotated files. Timestamp values are UTC Unix seconds; the report also includes only version and OS, not personal machine identity. No telemetry or network requests are performed by diagnostics.
 
 Existing How it works is a separate guide page; About SoftClone shows version, platform, license, repository and local data folder. Ko-fi is linked externally (`https://ko-fi.com/rudycity`) from About and the sidebar. The donation provider handles any transaction outside the app. Neither connection nor donation is a feature prerequisite.
+
+
+## Project license (v0.5.5)
+
+SoftClone's project license is **Apache License, Version 2.0** (SPDX `Apache-2.0`). The root `LICENSE` contains the full standard terms and `NOTICE` retains the RudyCity copyright attribution. All published archives include both files next to the executable. The About screen and Cargo package metadata agree with the repository license. Third-party dependencies retain their own license terms; the project license change does not relicense them. Previously published MIT releases retain the license terms under which they were distributed.

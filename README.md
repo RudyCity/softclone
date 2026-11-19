@@ -39,7 +39,7 @@ For architectural details and threat-model limitations, see [docs/architecture.m
 
 Use only software you have permission to copy. SoftClone does **not** elevate privileges, run an installer, copy application credentials or import browser profiles. Relative symlinks that resolve within the chosen source are preserved on Unix; external links and Windows symlinks are rejected. All launches use explicit process APIs, not shell interpolation.
 
-License: MIT.
+License: **Apache-2.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 ## Universal compatibility track (0.2)
 
@@ -142,7 +142,7 @@ The change is limited to UI layout. Application discovery, Store inventory, clon
 
 **Privacy:** diagnostics use only fixed event codes and timestamps; no executable paths, profile contents, file names, user names, account credentials, tokens or arbitrary error strings are recorded. Logs are never uploaded or transmitted by SoftClone. Export is explicitly initiated by the user. This is operational history, not a complete operating-system trace or crash dump.
 
-**About:** a separate About SoftClone page displays package version, platform, MIT license, source repository and local data folder action. The previous How it works guide remains available.
+**About:** a separate About SoftClone page displays package version, platform, license information, source repository and local data folder action. The previous How it works guide remains available.
 
 **Optional donation:** Support Development opens the user's Ko-fi page at https://ko-fi.com/rudycity using a normal external browser link. No donation is necessary to use SoftClone, and the app never processes payment information.
 

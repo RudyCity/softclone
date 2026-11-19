@@ -1,9 +1,9 @@
 [package]
 name = "softclone"
-version = "0.5.4"
+version = "0.5.5"
 edition = "2021"
 rust-version = "1.88"
-license = "MIT"
+license = "Apache-2.0"
 description = "Native portable application cloning workspace"
 repository = "https://github.com/RudyCity/softclone"
 

@@ -516,7 +516,7 @@ impl DesktopApp {
                 }
                 ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new("VERSION 0.5.4  •  LOCAL")
+                        RichText::new("VERSION 0.5.5  •  LOCAL")
                             .size(10.0)
                             .color(Color32::from_rgb(133, 154, 155)),
                     );
@@ -1413,7 +1413,7 @@ impl DesktopApp {
                     "SoftClone manages portable copies and supported separate profiles. It is not a full OS container and cannot guarantee multi-instance behavior for every installed app.",
                 );
                 ui.add_space(12.0);
-                ui.label(RichText::new("License  ·  MIT").size(13.0).color(MUTED));
+                ui.label(RichText::new("License  ·  Apache 2.0").size(13.0).color(MUTED));
                 ui.hyperlink_to("Source code and issue tracker", env!("CARGO_PKG_REPOSITORY"));
                 if icons::button(ui, Icon::FolderOpen, "Open local data folder", None).clicked() {
                     if let Err(error) = core::open_folder(&registry::app_data_dir()) {
