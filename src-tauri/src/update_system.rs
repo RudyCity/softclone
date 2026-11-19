@@ -232,6 +232,7 @@ pub async fn check_updates() -> DesktopResult<UpdateCheck> {
             release_url: format!("{RELEASES_PAGE}/tag/v{version}"),
             release_notes: release
                 .body
+                .as_deref()
                 .unwrap_or_default()
                 .chars()
                 .take(5500)
