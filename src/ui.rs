@@ -43,7 +43,7 @@ impl DesktopApp {
         style.spacing.item_spacing = Vec2::new(12.0, 12.0);
         style.spacing.button_padding = Vec2::new(16.0, 10.0);
         style.visuals = egui::Visuals::light();
-        style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, LINE);
+        style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, LINE);
         style.visuals.widgets.inactive.corner_radius = CornerRadius::same(8);
         style.visuals.widgets.hovered.corner_radius = CornerRadius::same(8);
         style.visuals.widgets.active.corner_radius = CornerRadius::same(8);
@@ -198,7 +198,7 @@ impl DesktopApp {
     fn stat(ui: &mut egui::Ui, value: &str, label: &str) {
         Frame::new()
             .fill(WHITE)
-            .stroke(Stroke::new(1.0, LINE))
+            .stroke(Stroke::new(1.0_f32, LINE))
             .corner_radius(12)
             .inner_margin(20)
             .show(ui, |ui| {
@@ -247,7 +247,7 @@ impl DesktopApp {
         });
         ui.add_space(12.0);
         if self.items.is_empty() {
-            Frame::new().fill(WHITE).stroke(Stroke::new(1.0, LINE)).corner_radius(12)
+            Frame::new().fill(WHITE).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(12)
                 .inner_margin(30).show(ui, |ui| {
                     ui.set_min_height(172.0);
                     ui.vertical_centered(|ui| {
@@ -266,7 +266,7 @@ impl DesktopApp {
         for item in cards {
             Frame::new()
                 .fill(WHITE)
-                .stroke(Stroke::new(1.0, LINE))
+                .stroke(Stroke::new(1.0_f32, LINE))
                 .corner_radius(12)
                 .inner_margin(18)
                 .show(ui, |ui| {
@@ -338,7 +338,7 @@ impl DesktopApp {
             "Create an app clone",
             "Choose local application files. The original stays exactly where it is.",
         );
-        Frame::new().fill(WHITE).stroke(Stroke::new(1.0, LINE)).corner_radius(12)
+        Frame::new().fill(WHITE).stroke(Stroke::new(1.0_f32, LINE)).corner_radius(12)
             .inner_margin(26).show(ui, |ui| {
                 ui.set_max_width(760.0);
                 ui.label(RichText::new("01  SOURCE").color(ACCENT).size(11.0).strong());
@@ -446,7 +446,7 @@ impl DesktopApp {
         for (number, title, detail) in items {
             Frame::new()
                 .fill(WHITE)
-                .stroke(Stroke::new(1.0, LINE))
+                .stroke(Stroke::new(1.0_f32, LINE))
                 .corner_radius(12)
                 .inner_margin(22)
                 .show(ui, |ui| {
