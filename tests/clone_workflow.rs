@@ -157,8 +157,10 @@ fn profile_only_instance_does_not_copy_executable() {
         name: "Installed profile".into(),
         entrypoint: String::new(),
         isolated_profile: true,
-    }).unwrap();
-    let record = core::create_profile_instance(&prepared, &sandbox.path().join("instances")).unwrap();
+    })
+    .unwrap();
+    let record =
+        core::create_profile_instance(&prepared, &sandbox.path().join("instances")).unwrap();
     assert_eq!(record.run_mode, core::RunMode::ProfileOnly);
     assert!(!record.root.join("payload").exists());
     assert!(record.root.join("profile/browser").is_dir());
@@ -166,7 +168,10 @@ fn profile_only_instance_does_not_copy_executable() {
 
     let path = sandbox.path().join("reg.json");
     registry::store(&path, std::slice::from_ref(&record)).unwrap();
-    assert_eq!(registry::load(&path).unwrap()[0].run_mode, core::RunMode::ProfileOnly);
+    assert_eq!(
+        registry::load(&path).unwrap()[0].run_mode,
+        core::RunMode::ProfileOnly
+    );
 }
 
 #[test]

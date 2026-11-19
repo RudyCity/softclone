@@ -120,7 +120,9 @@ impl DesktopApp {
     }
 
     fn start_discovery(&mut self) {
-        if self.discover_worker.is_some() { return; }
+        if self.discover_worker.is_some() {
+            return;
+        }
         let (tx, rx) = mpsc::channel();
         self.discover_worker = Some(rx);
         std::thread::spawn(move || {
@@ -183,7 +185,9 @@ impl DesktopApp {
                 }
                 if Self::nav_button(ui, "⌕   Discover apps", self.page == Page::Discover) {
                     self.page = Page::Discover;
-                    if self.discovered.is_empty() { self.start_discovery(); }
+                    if self.discovered.is_empty() {
+                        self.start_discovery();
+                    }
                 }
                 ui.add_space(24.0);
                 ui.label(
@@ -403,7 +407,9 @@ impl DesktopApp {
         );
         ui.add_space(19.0);
         let query = self.discover_query.trim().to_lowercase();
-        let matches: Vec<_> = self.discovered.iter()
+        let matches: Vec<_> = self
+            .discovered
+            .iter()
             .filter(|item| {
                 query.is_empty()
                     || item.name.to_lowercase().contains(&query)
@@ -419,14 +425,22 @@ impl DesktopApp {
                 });
         }
         for app in matches {
-            Frame::new().fill(WHITE).stroke(Stroke::new(1.0_f32, LINE))
-                .corner_radius(12).inner_margin(17).show(ui, |ui| {
+            Frame::new()
+                .fill(WHITE)
+                .stroke(Stroke::new(1.0_f32, LINE))
+                .corner_radius(12)
+                .inner_margin(17)
+                .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             ui.label(RichText::new(&app.name).size(15.0).strong().color(INK));
                             ui.label(RichText::new(app.support.label()).size(12.0).color(ACCENT));
                             ui.label(RichText::new(&app.note).size(11.0).color(MUTED));
-                            ui.label(RichText::new(app.path.display().to_string()).size(11.0).color(MUTED));
+                            ui.label(
+                                RichText::new(app.path.display().to_string())
+                                    .size(11.0)
+                                    .color(MUTED),
+                            );
                         });
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui.button("Use this app").clicked() {
@@ -547,16 +561,16 @@ impl DesktopApp {
             } else {
                 core::create_clone(&prepared, &library)
             })
-                .map_err(|e| e.to_string())
-                .and_then(|item| {
-                    registry::add(item.clone()).map_err(|e| {
-                        format!(
-                            "Instance created, but registry save failed: {e}. Location: {}",
-                            item.root.display()
-                        )
-                    })?;
-                    Ok(item)
-                });
+            .map_err(|e| e.to_string())
+            .and_then(|item| {
+                registry::add(item.clone()).map_err(|e| {
+                    format!(
+                        "Instance created, but registry save failed: {e}. Location: {}",
+                        item.root.display()
+                    )
+                })?;
+                Ok(item)
+            });
             let _ = tx.send(result);
         });
     }
