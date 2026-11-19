@@ -6,7 +6,7 @@ use crate::components::{
 use crate::icons::{self, Icon};
 use eframe::egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Stroke, Vec2};
 use softclone::{
-    core::{self, CloneRecord, CloneRequest, CopyPlan, CopyProgress, RunMode},
+    core::{self, CloneRecord, CloneRequest, CopyPlan, CopyProgress},
     instance_manager::{self, BackupInfo},
     registry,
     universal::{self, AppFilter, DiscoveredApp, Support},

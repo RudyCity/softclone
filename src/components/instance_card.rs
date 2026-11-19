@@ -1,6 +1,6 @@
 //! Instance cards keep lifecycle controls separate from persistence and process IO.
 use crate::icons::{self, Icon};
-use eframe::egui::{self, Color32, Frame, Label, RichText, Stroke, Ui};
+use eframe::egui::{Color32, Frame, Label, RichText, Stroke, Ui};
 use softclone::core::{CloneRecord, RunMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
