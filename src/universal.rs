@@ -1,11 +1,12 @@
 //! User-space app discovery and known profile adapters.
 //! Discovery is read-only. A discovered app is never launched automatically.
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(target_os = "linux")]
 use std::env;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::fs;
 use std::{
     collections::HashSet,
     ffi::OsString,
-    fs,
     path::{Path, PathBuf},
 };
 
@@ -86,6 +87,7 @@ pub fn adapter_args(target: &Path, profile_dir: &Path) -> Vec<OsString> {
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn candidate(name: String, path: PathBuf, installed: bool) -> DiscoveredApp {
     let support = if adapter_for(&path).is_some() {
         Support::ProfileAdapter
