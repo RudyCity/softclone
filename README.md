@@ -71,3 +71,15 @@ Every form is now composed from reusable egui components under `src/components/`
 Discover search and Rescan are grouped in a unified toolbar, while scanning progress and match counts occupy their own status line. Explanatory text wraps instead of extending outside the viewport. The interface supports narrow and wide desktop content areas without detached search icons. Creation keeps its validation and existing Rune name suggestions.
 
 This is a presentation and organization update; it does not claim new OS-level cloning isolation. [Release notes](docs/releases/v0.2.2.md).
+
+## Installed Apps 2.0 — first milestone (v0.3.0)
+
+**New Windows inventory fields:** registered publisher and display version, with an explicit availability assessment. Discovery now searches application name, publisher, version and executable path, and offers filters for All apps / Profile-ready / Requires review / Missing executable.
+
+**Windows icons:** executable icons are loaded using read-only OS resource extraction on a separate background worker. Extraction is bounded to a subset of installed executables; an egui vector fallback appears when a native icon is not available. macOS/Linux currently retain vector icons.
+
+**Native source chooser:** Create clone now offers Choose executable / Choose folder dialogs, alongside manual path entry. Dialogs run locally and do not upload selected files.
+
+**Supported boundaries:** Windows Store/MSIX package enumeration and launching are not implemented yet, nor is full system-installed application virtualization. Unknown apps can be displayed for review, but they are not guaranteed to have isolated profiles. The compatibility assessment always distinguishes known browser profile adapters from manual review.
+
+**Test/release:** the repository's CI runs formatting, Clippy, unit/integration tests and release builds on Windows, macOS and Linux. Each release is created only after all platforms pass, and includes SHA256SUMS.

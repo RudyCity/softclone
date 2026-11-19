@@ -18,3 +18,7 @@ Installed app discovery has a read-only scan, search and a single explicit selec
 - `src/components/discovery_form.rs` contains an integrated search field with its icon inside the input, a distinct Rescan action, loading/loaded status, and responsive application cards. Avoid placing status strings into horizontal toolbars that can clip.
 - `src/components/create_form.rs` owns source, details, strategy, and submit forms. Inputs use consistent heights; helper notes wrap; invalid submissions stay disabled; persistent work remains outside the view component.
 - All forms share the same neutral palette and border system and adapt to available content width, not absolute screen coordinates.
+
+## v0.3.0 installed-app inventory
+
+Search applies across name, publisher, version and path. Filter tabs distinguish profile-ready browsers, manual review and unresolved executable entries; result cards retain honest support notes. Windows exe icons load off the UI thread and fall back to the app vector icon without placeholder glyphs. Create clone includes a native file/folder browse affordance while retaining path editing for advanced use.

@@ -46,3 +46,12 @@ UI icons are drawn using egui Painter vector strokes, avoiding unsupported Unico
 ## UI modularity (v0.2.2)
 
 The desktop shell owns navigation, registry integration, background workers and global notices. Form components own only presentation and controlled input changes: shared fields, the installed-application search toolbar and result cards, and the clone creation steps. Form components return user actions to the shell, which handles process/IO operations. Scanning and instance creation remain off the UI thread. This separation makes form styling reusable and avoids loading indicators affecting search input layout.
+
+## Windows inventory and local source picker (v0.3.0 milestone)
+
+- Windows uninstall-registry entries expose publisher and display version as optional metadata. These fields and executable paths can be searched; GUI filters are deterministic and unit-tested.
+- Installed-program icons are extracted from primary executables with the Windows icon resource extractor in a bounded worker; GPU textures are created on the UI thread and held in a local cache. There is no executable invocation or elevation to extract an icon. A vector fallback is used when icons cannot be extracted.
+- Source input now supports OS-provided file/folder dialogs. These are deliberately modal on the UI thread for native macOS window integration; no filesystem operation occurs until a user selects a source and submits the existing validated clone form.
+- MSIX/Windows Store packages are not yet enumerated. Win32 uninstall registry entries are not a complete inventory of all packages; Windows PackageManager API integration remains an outstanding feature.
+- Icons for macOS/Linux are currently fallback vectors rather than native app artwork; real icon extraction for these OSes remains outstanding.
+- The scanner remains read-only and the engine does not bypass licenses, DRM, services, drivers or OS sandboxing.
