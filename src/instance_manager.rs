@@ -402,9 +402,15 @@ mod tests {
         assert_ne!(instance.root, second.root);
         assert_ne!(instance.id, second.id);
         assert_eq!(second.name, "Independent");
-        assert_eq!(fs::read(second.root.join("payload/app.exe")).unwrap(), b"v1");
+        assert_eq!(
+            fs::read(second.root.join("payload/app.exe")).unwrap(),
+            b"v1"
+        );
         fs::write(second.root.join("payload/app.exe"), b"v2").unwrap();
-        assert_eq!(fs::read(instance.root.join("payload/app.exe")).unwrap(), b"v1");
+        assert_eq!(
+            fs::read(instance.root.join("payload/app.exe")).unwrap(),
+            b"v1"
+        );
         assert_eq!(registry::load(&db).unwrap().len(), 2);
     }
 
