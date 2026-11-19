@@ -28,6 +28,14 @@ enum Page {
     About,
 }
 
+#[cfg(target_os = "windows")]
+struct IconPixels {
+    path: PathBuf,
+    width: usize,
+    height: usize,
+    rgba: Vec<u8>,
+}
+
 pub struct DesktopApp {
     page: Page,
     items: Vec<CloneRecord>,
@@ -41,7 +49,7 @@ pub struct DesktopApp {
     discover_filter: AppFilter,
     discover_worker: Option<Receiver<Vec<DiscoveredApp>>>,
     #[cfg(target_os = "windows")]
-    icon_worker: Option<Receiver<(PathBuf, usize, usize, Vec<u8>)>>,
+    icon_worker: Option<Receiver<IconPixels>>,
     #[cfg(target_os = "windows")]
     app_icons: std::collections::HashMap<PathBuf, egui::TextureHandle>,
     discovery_complete: bool,
@@ -203,7 +211,7 @@ impl DesktopApp {
                 if icon.rgba.len() != width * height * 4 {
                     continue;
                 }
-                if sender.send((path, width, height, icon.rgba)).is_err() {
+                if sender.send(IconPixels { path, width, height, rgba: icon.rgba }).is_err() {
                     break;
                 }
             }
@@ -218,7 +226,7 @@ impl DesktopApp {
         let mut finished = false;
         loop {
             match receiver.try_recv() {
-                Ok((path, width, height, rgba)) => {
+                Ok(IconPixels { path, width, height, rgba }) => {
                     let texture = ctx.load_texture(
                         format!("installed-app:{}", path.display()),
                         egui::ColorImage::from_rgba_unmultiplied([width, height], &rgba),
