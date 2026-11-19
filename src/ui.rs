@@ -198,6 +198,7 @@ impl DesktopApp {
         let (sender, receiver) = mpsc::channel();
         self.analysis_worker = Some(receiver);
         self.analysis = None;
+        self.log_event(DiagnosticEvent::PreflightStarted);
         std::thread::spawn(move || {
             let result = core::prepare(&request)
                 .and_then(|prepared| {
@@ -221,8 +222,12 @@ impl DesktopApp {
             Some(Ok((key, outcome))) => {
                 if key == self.analysis_key() {
                     match outcome {
-                        Ok(plan) => self.analysis = Some((key, plan)),
+                        Ok(plan) => {
+                            self.log_event(DiagnosticEvent::PreflightCompleted);
+                            self.analysis = Some((key, plan));
+                        }
                         Err(error) => {
+                            self.log_event(DiagnosticEvent::PreflightFailed);
                             self.notice = Some((format!("Preflight failed: {error}"), true))
                         }
                     }
@@ -230,6 +235,7 @@ impl DesktopApp {
                 self.analysis_worker = None;
             }
             Some(Err(mpsc::TryRecvError::Disconnected)) => {
+                self.log_event(DiagnosticEvent::PreflightFailed);
                 self.notice = Some(("Preflight worker stopped unexpectedly.".into(), true));
                 self.analysis_worker = None;
             }
@@ -268,6 +274,7 @@ impl DesktopApp {
             self.copy_progress = None;
             match result {
                 Ok(item) => {
+                    self.log_event(DiagnosticEvent::CloneCompleted);
                     self.items.insert(0, item);
                     self.notice = Some(("Clone created. You can now launch it.".into(), false));
                     self.page = Page::Library;
@@ -277,7 +284,10 @@ impl DesktopApp {
                     self.profile_only = false;
                     self.analysis = None;
                 }
-                Err(error) => self.notice = Some((error, true)),
+                Err(error) => {
+                    self.log_event(DiagnosticEvent::CloneFailed);
+                    self.notice = Some((error, true));
+                },
             }
         }
     }
@@ -303,6 +313,7 @@ impl DesktopApp {
         let (tx, rx) = mpsc::channel();
         self.discover_worker = Some(rx);
         self.discovery_complete = false;
+        self.log_event(DiagnosticEvent::DiscoveryStarted);
         std::thread::spawn(move || {
             let _ = tx.send(universal::discover_apps());
         });
@@ -312,6 +323,7 @@ impl DesktopApp {
         if let Some(worker) = &self.discover_worker {
             match worker.try_recv() {
                 Ok(apps) => {
+                    self.log_event(DiagnosticEvent::DiscoveryCompleted);
                     self.discovered = apps;
                     self.discover_worker = None;
                     self.discovery_complete = true;
@@ -319,6 +331,7 @@ impl DesktopApp {
                     self.start_icon_discovery();
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
+                    self.log_event(DiagnosticEvent::DiscoveryFailed);
                     self.notice = Some(("App discovery stopped unexpectedly.".into(), true));
                     self.discover_worker = None;
                 }
@@ -663,6 +676,9 @@ impl DesktopApp {
                 Ok(None) => {}
             }
         }
+        if !finished.is_empty() {
+            self.log_event(DiagnosticEvent::ProcessExited);
+        }
         for id in finished {
             self.processes.remove(&id);
         }
@@ -699,6 +715,7 @@ impl DesktopApp {
             self.notice = Some(("Instance is already running in this session.".into(), true));
             return;
         }
+        self.log_event(DiagnosticEvent::LaunchStarted);
         match core::launch(record) {
             Ok(child) => {
                 let pid = child.id();
@@ -728,6 +745,7 @@ impl DesktopApp {
                 ));
             }
             Err(error) => {
+                self.log_event(DiagnosticEvent::LaunchFailed);
                 self.notice = Some((format!("Launch failed: {error}"), true));
             }
         }
@@ -753,6 +771,13 @@ impl DesktopApp {
             ManagerWork::Delete => "Deleting instance",
         };
         self.manager_busy = Some((record.id, label.into()));
+        self.log_event(match &work {
+            ManagerWork::Rename(_) => DiagnosticEvent::ManagerRenameStarted,
+            ManagerWork::Duplicate(_) => DiagnosticEvent::ManagerDuplicateStarted,
+            ManagerWork::Backup => DiagnosticEvent::ManagerBackupStarted,
+            ManagerWork::Restore(_) => DiagnosticEvent::ManagerRestoreStarted,
+            ManagerWork::Delete => DiagnosticEvent::ManagerDeleteStarted,
+        });
         let (tx, rx) = mpsc::channel();
         self.manager_worker = Some(rx);
         std::thread::spawn(move || {
@@ -805,13 +830,20 @@ impl DesktopApp {
                     return;
                 }
                 match outcome {
-                    Ok(message) => self.notice = Some((message, false)),
-                    Err(error) => self.notice = Some((error, true)),
+                    Ok(message) => {
+                        self.log_event(DiagnosticEvent::ManagerCompleted);
+                        self.notice = Some((message, false));
+                    }
+                    Err(error) => {
+                        self.log_event(DiagnosticEvent::ManagerFailed);
+                        self.notice = Some((error, true));
+                    }
                 }
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 self.manager_worker = None;
                 self.manager_busy = None;
+                self.log_event(DiagnosticEvent::ManagerFailed);
                 self.notice = Some(("Instance manager worker disconnected.".into(), true));
             }
             Err(mpsc::TryRecvError::Empty) => {
@@ -824,12 +856,24 @@ impl DesktopApp {
         match action {
             InstanceAction::Launch => self.launch_managed(record),
             InstanceAction::Stop => match self.stop_managed_process(record.id) {
-                Ok(()) => self.notice = Some((format!("Stopped {}.", record.name), false)),
-                Err(error) => self.notice = Some((error, true)),
+                Ok(()) => {
+                    self.log_event(DiagnosticEvent::ProcessStopped);
+                    self.notice = Some((format!("Stopped {}.", record.name), false));
+                }
+                Err(error) => {
+                    self.log_event(DiagnosticEvent::ProcessStopFailed);
+                    self.notice = Some((error, true));
+                }
             },
             InstanceAction::Restart => match self.stop_managed_process(record.id) {
-                Ok(()) => self.launch_managed(record),
-                Err(error) => self.notice = Some((error, true)),
+                Ok(()) => {
+                    self.log_event(DiagnosticEvent::ProcessStopped);
+                    self.launch_managed(record);
+                }
+                Err(error) => {
+                    self.log_event(DiagnosticEvent::ProcessStopFailed);
+                    self.notice = Some((error, true));
+                }
             },
             InstanceAction::OpenFolder => {
                 if let Err(error) = core::open_folder(&record.root) {
@@ -1201,6 +1245,7 @@ impl DesktopApp {
             if let Some(cancel) = &self.cancel_token {
                 cancel.store(true, Ordering::SeqCst);
                 self.cancellation_requested = true;
+                self.log_event(DiagnosticEvent::CloneCancelled);
             }
         }
         if action.submit {
@@ -1226,6 +1271,7 @@ impl DesktopApp {
         let prepared = match core::prepare(&request) {
             Ok(plan) => plan,
             Err(error) => {
+                self.log_event(DiagnosticEvent::CloneFailed);
                 self.notice = Some((format!("Check clone details: {error}"), true));
                 return;
             }
@@ -1238,6 +1284,7 @@ impl DesktopApp {
         self.copy_progress = None;
         let (sender, receiver) = mpsc::channel();
         self.worker = Some(receiver);
+        self.log_event(DiagnosticEvent::CloneStarted);
         std::thread::spawn(move || {
             let result = (if profile_only {
                 if cancel.load(Ordering::SeqCst) {
