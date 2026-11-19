@@ -8,7 +8,8 @@ pub fn clone_label(base: &str, index: i64) -> Result<String, String> {
     let context = Context::with_default_modules().map_err(|e| e.to_string())?;
     let runtime = Arc::new(context.runtime().map_err(|e| e.to_string())?);
     let mut sources = Sources::new();
-    sources.insert(Source::memory(LABEL_SCRIPT).map_err(|e| e.to_string())?);
+    let source = Source::memory(LABEL_SCRIPT).map_err(|e| e.to_string())?;
+    sources.insert(source).map_err(|e| e.to_string())?;
     let unit = rune::prepare(&mut sources)
         .with_context(&context)
         .build()

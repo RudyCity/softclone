@@ -10,7 +10,6 @@ use std::{
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
-use uuid::Uuid;
 
 const INK: Color32 = Color32::from_rgb(24, 34, 43);
 const MUTED: Color32 = Color32::from_rgb(112, 123, 132);
@@ -30,7 +29,6 @@ enum Page {
 pub struct DesktopApp {
     page: Page,
     items: Vec<CloneRecord>,
-    selected: Option<Uuid>,
     source: String,
     name: String,
     entrypoint: String,
@@ -60,7 +58,6 @@ impl DesktopApp {
         Self {
             page: Page::Library,
             items,
-            selected: None,
             source: String::new(),
             name: String::new(),
             entrypoint: String::new(),
@@ -74,7 +71,6 @@ impl DesktopApp {
         if let Some(worker) = &self.worker {
             match worker.try_recv() {
                 Ok(Ok(item)) => {
-                    self.selected = Some(item.id);
                     self.items.insert(0, item);
                     self.notice = Some(("Clone created. You can now launch it.".into(), false));
                     self.worker = None;
