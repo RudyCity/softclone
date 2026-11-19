@@ -68,7 +68,10 @@ pub fn search_field(ui: &mut Ui, value: &mut String, width: f32) -> Response {
             ui.horizontal(|ui| {
                 icons::inline(ui, Icon::Search, 18.0, MUTED);
                 ui.add_sized(
-                    Vec2::new((width - 66.0).max(80.0), SEARCH_TEXT_HEIGHT),
+                    Vec2::new(
+                        (width - 66.0).max(80.0),
+                        SEARCH_CONTROL_HEIGHT - 2.0 * SEARCH_PADDING_Y as f32,
+                    ),
                     TextEdit::singleline(value)
                         .hint_text("Search installed applications")
                         .align(egui::Align2::LEFT_CENTER)
