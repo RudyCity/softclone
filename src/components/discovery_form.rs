@@ -88,9 +88,9 @@ impl DiscoveryToolbar<'_> {
 
 pub fn compatibility_note(ui: &mut Ui) {
     #[cfg(target_os = "windows")]
-    let message = "Windows: registered installed programs, plus known browser executables. Microsoft Store/MSIX applications are not yet included. Scanning never launches programs.";
+    let message = "Windows: Win32 installed-program registry, known launchers and current-user AppX/MSIX packages. Store packages open normally and are not cloneable through executable copying.";
     #[cfg(target_os = "macos")]
-    let message = "macOS: application bundles from system and user Applications folders. Scanning never launches programs.";
+    let message = "macOS: system and user .app bundles, including Mac App Store receipts when present. App Store bundles can be opened normally; cloning them may violate licensing or fail.";
     #[cfg(target_os = "linux")]
     let message = "Linux: desktop application entries and common AppImage locations. Flatpak/Snap containers are not yet included.";
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
@@ -102,6 +102,7 @@ pub fn compatibility_note(ui: &mut Ui) {
 pub enum AppCardAction {
     UseApp,
     LocateExecutable,
+    OpenStoreApp,
 }
 
 fn is_host_component(app: &DiscoveredApp) -> bool {
@@ -135,6 +136,10 @@ fn app_details(ui: &mut Ui, app: &DiscoveredApp) {
         icons::inline(ui, icon, 16.0, fields::ACCENT);
         let status = if is_host_component(app) {
             "OBS plug-in · not a standalone app"
+        } else if app.store_id.is_some() {
+            "Windows packaged app · normal launch only"
+        } else if app.origin == "Mac App Store (receipt found)" {
+            "Mac App Store · normal launch only"
         } else {
             app.support.label()
         };
@@ -169,6 +174,12 @@ fn app_details(ui: &mut Ui, app: &DiscoveredApp) {
 fn choose_button(ui: &mut Ui, app: &DiscoveredApp) -> Option<AppCardAction> {
     if is_host_component(app) {
         return None;
+    }
+    if app.store_id.is_some() || app.origin == "Mac App Store (receipt found)" {
+        return ui.button("Open app")
+            .on_hover_text("Open normally without cloning; Store package/profile isolation is not supported.")
+            .clicked()
+            .then_some(AppCardAction::OpenStoreApp);
     }
     if app.launchable {
         ui.button("Use this app")

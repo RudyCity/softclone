@@ -1047,6 +1047,34 @@ impl DesktopApp {
                     self.isolated = true;
                     self.page = Page::Create;
                 }
+                Some(discovery_form::AppCardAction::OpenStoreApp) => {
+                    #[cfg(target_os = "windows")]
+                    let open = app
+                        .store_id
+                        .as_deref()
+                        .ok_or_else(|| "Missing Windows application ID.".to_string())
+                        .and_then(softclone::windows_store::open_app);
+                    #[cfg(target_os = "macos")]
+                    let open = std::process::Command::new("open")
+                        .arg("-a")
+                        .arg(&app.path)
+                        .spawn()
+                        .map(|_| ())
+                        .map_err(|error| error.to_string());
+                    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+                    let open: Result<(), String> =
+                        Err("This platform does not support Store app activation.".into());
+                    self.notice = Some(match open {
+                        Ok(()) => (
+                            format!(
+                                "Requested a normal launch of {}. Store apps do not have separate SoftClone profiles.",
+                                app.name
+                            ),
+                            false,
+                        ),
+                        Err(error) => (format!("Cannot open {}: {error}", app.name), true),
+                    });
+                }
                 Some(discovery_form::AppCardAction::LocateExecutable) => {
                     let selected = rfd::FileDialog::new()
                         .set_title(format!("Locate executable for {}", app.name))
