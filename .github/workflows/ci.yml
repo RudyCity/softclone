@@ -32,7 +32,6 @@ jobs:
 
   desktop:
     name: Native Tauri build (${{ matrix.os }})
-    needs: engine
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -73,7 +72,7 @@ jobs:
   publish:
     name: Publish verified v0.6.0 bundles
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: desktop
+    needs: [engine, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
