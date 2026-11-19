@@ -516,7 +516,7 @@ impl DesktopApp {
                 }
                 ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new("VERSION 0.5.3  •  LOCAL")
+                        RichText::new("VERSION 0.5.4  •  LOCAL")
                             .size(10.0)
                             .color(Color32::from_rgb(133, 154, 155)),
                     );

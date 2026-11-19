@@ -39,3 +39,7 @@ Discover cards distinguish Win32 launchers, AppX/MSIX packages, Mac App Store bu
 ## Discover toolbar alignment (v0.5.3)
 
 The shared search field is 35 pt high (19 pt text area plus 8 pt vertical padding each side), matching the custom Rescan button. Search and Rescan share a top-aligned horizontal layout; the icon and single-line editor share a cross-centered horizontal row. Keep these dimensions synchronized when adjusting control sizing or DPI behavior.
+
+## v0.5.4 Diagnostics and About navigation
+
+Sidebar groups use Workspace, Tools (Debug logs), and Information (How it works, About SoftClone, Support development). Diagnostics uses the existing neutral palette, readable cards, status counters, severity chips and search. Clear is explicitly confirmed; copy/export are user initiated, never automatic. About displays application identity and metadata separately from the workflow guide, with a simple external Ko-fi link and no in-app checkout.

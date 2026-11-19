@@ -94,3 +94,11 @@ Packaged apps have `store_id`, an intentionally empty executable path, `ReviewRe
 On macOS, `macos_candidate` tags `.app` bundles containing `Contents/_MASReceipt/receipt` as probable Mac App Store distributions; the UI opens these through `open -a` rather than presenting direct clone support. The receipt is a heuristic only and does not bypass purchase validation. Existing bundle enumeration remains read-only.
 
 Known Win32 launcher resolution adds name-specific executable lists and root discovery for Illustrator, Android Studio, CapCut and OBSBOT Center while excluding plugin and updater paths. Unresolved Win32 records instead offer an explicit manual executable file dialog. No arbitrary file is silently selected.
+
+## v0.5.4 diagnostics and application information
+
+The desktop binary uses `src/diagnostics.rs` for privacy-safe operational logging. Typed `Event` enum variants map to immutable categories, severity levels and messages; no user-entered values or file system paths can be serialized via the event API. A bounded `VecDeque` tracks at most 500 events, while the JSONL journal under `registry::app_data_dir()` rotates when it reaches 128 KiB; at most one older file remains. Storage errors do not crash the app; a warning is displayed on Debug logs and memory remains usable.
+
+Key lifecycle activities in `DesktopApp` emit events at start/completion/failure of discovery, preflight, cloning, process management, and instance operations. Copy report writes plain sanitized text into the clipboard; Export report asks the user to choose a local destination. Clear logs uses a confirmation modal and removes both active and rotated files. Timestamp values are UTC Unix seconds; the report also includes only version and OS, not personal machine identity. No telemetry or network requests are performed by diagnostics.
+
+Existing How it works is a separate guide page; About SoftClone shows version, platform, license, repository and local data folder. Ko-fi is linked externally (`https://ko-fi.com/rudycity`) from About and the sidebar. The donation provider handles any transaction outside the app. Neither connection nor donation is a feature prerequisite.

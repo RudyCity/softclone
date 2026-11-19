@@ -135,3 +135,15 @@ To test two windows: quit all previous Zoom instances (including the system tray
 The Discover apps search input and Rescan control share a 35-point control height and align along the top edge of the same row. Search text and magnifying-glass icon use compact, cross-centered egui row geometry rather than the previously oversized inner TextEdit.
 
 The change is limited to UI layout. Application discovery, Store inventory, cloning and saved profiles remain unchanged.
+
+## Diagnostics, About and Support Development (v0.5.4)
+
+**Debug logs:** a dedicated sidebar page presents a real, local event history for discovery, preflight, clone creation/cancellation, managed process launch/stop, and instance rename/duplicate/backup/restore/delete. Events are categorized, timestamped, and filtered by severity or text. The page reports event/error counts and allows copying a sanitized report, choosing a destination for manual text export, and clearing the log with confirmation. Events are saved as local JSONL under the SoftClone application data directory, with a 128 KiB active log limit and one rotated file. An in-memory view is capped at 500 entries.
+
+**Privacy:** diagnostics use only fixed event codes and timestamps; no executable paths, profile contents, file names, user names, account credentials, tokens or arbitrary error strings are recorded. Logs are never uploaded or transmitted by SoftClone. Export is explicitly initiated by the user. This is operational history, not a complete operating-system trace or crash dump.
+
+**About:** a separate About SoftClone page displays package version, platform, MIT license, source repository and local data folder action. The previous How it works guide remains available.
+
+**Optional donation:** Support Development opens the user's Ko-fi page at https://ko-fi.com/rudycity using a normal external browser link. No donation is necessary to use SoftClone, and the app never processes payment information.
+
+Tests cover diagnostic persistence, severity filtering, bounded history, cleared files and corrupted-line handling. The release workflow still requires Windows/macOS/Linux checks and build artifacts from the same commit.
