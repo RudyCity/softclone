@@ -4,7 +4,11 @@ use softclone::{
 };
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::{fs, path::Path, sync::atomic::{AtomicBool, Ordering}};
+use std::{
+    fs,
+    path::Path,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 fn make_source(dir: &Path) -> std::path::PathBuf {
     let source = dir.join("my-source");
@@ -267,6 +271,10 @@ fn preflight_rejects_external_symlinks_without_destination_changes() {
         name: "Reject links".into(),
         entrypoint: "mytool".into(),
         isolated_profile: false,
-    }).unwrap();
-    assert!(matches!(core::analyze(&prepared), Err(core::CloneError::Link(_))));
+    })
+    .unwrap();
+    assert!(matches!(
+        core::analyze(&prepared),
+        Err(core::CloneError::Link(_))
+    ));
 }
