@@ -74,7 +74,6 @@ pub fn search_field(ui: &mut Ui, value: &mut String, width: f32) -> Response {
                     ),
                     TextEdit::singleline(value)
                         .hint_text("Search installed applications")
-                        .align(egui::Align2::LEFT_CENTER)
                         .frame(false),
                 )
             })
